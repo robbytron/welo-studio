@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Welo Studio — Demo</title>
+<!-- Inline SVG favicon — mint rounded square with a dark "W" mark.
+     Embedded as a data URL so no separate file is needed for Vercel. -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2300d88e'/%3E%3Ctext x='50' y='71' font-family='Inter,system-ui,sans-serif' font-size='62' font-weight='800' text-anchor='middle' fill='%23050608'%3EW%3C/text%3E%3C/svg%3E">
+<title>Welo Studio</title>
 <style>
 @font-face {
   font-family: 'Inter Tight';
@@ -36612,6 +36615,9 @@ body::after{
 #opal-screen .opal-card{position:relative;background:rgba(8,14,20,0.55);border:1px solid rgba(255,255,255,0.14);backdrop-filter:blur(24px) saturate(160%);-webkit-backdrop-filter:blur(24px) saturate(160%);box-shadow:0 40px 100px -30px rgba(0,0,0,0.75),0 0 0 1px rgba(255,255,255,0.04);text-align:left;padding:26px 28px;max-width:none;}
 #opal-screen .opal-card::before{content:"";position:absolute;top:-1px;left:30px;right:30px;height:2px;background:linear-gradient(90deg,transparent,#2cebab,transparent);border-radius:2px;}
 #opal-screen.opal-loading .opal-stage{display:flex !important;justify-content:center;align-items:center;}
+/* During auto-translate, only the cycling hero text is shown. The form/
+   card and all the stats are hidden — translation hangs are now caught by
+   a 30s fetch timeout instead of needing a visible progress bar. */
 #opal-screen.opal-loading .opal-card{display:none !important;}
 #opal-screen.opal-loading #opal-hero-container{width:min(720px,80vw);}
 #opal-screen.opal-loading .opal-tag-txt{text-align:center;}
@@ -39906,13 +39912,104 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           <div class="cp-ph-eyebrow">Client Portal</div>
           <h1 class="cp-ph-title">My Projects</h1>
         </div>
-        <button class="btn-new" onclick="showIntake()"><i class="ph ph-plus"></i>New Project</button>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <button onclick="openClientGlossary()" style="padding:10px 18px;background:rgba(0,216,142,0.10);color:var(--wl-mint-600,#00b56e);border:1px solid rgba(0,216,142,0.35);border-radius:999px;font-family:var(--font-sans);font-size:13px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:7px;"><i class="ph ph-bookmark-simple" style="font-size:15px"></i> Glossary</button>
+          <button onclick="openClientTM()" style="padding:10px 18px;background:rgba(0,216,142,0.10);color:var(--wl-mint-600,#00b56e);border:1px solid rgba(0,216,142,0.35);border-radius:999px;font-family:var(--font-sans);font-size:13px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:7px;" title="Translation Memory"><i class="ph ph-database" style="font-size:15px"></i> TM</button>
+          <button class="btn-new" onclick="showIntake()"><i class="ph ph-plus"></i>New Project</button>
+        </div>
       </div>
     </div>
     <div class="dash-content">
       <div class="stats-row" id="stats-row"></div>
       <div class="section-title">All Projects</div>
       <div class="jobs-grid" id="jobs-grid"></div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CLIENT GLOSSARY MODAL ═══ -->
+<div id="cp-glossary-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.45);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:24px;">
+  <div style="background:#fff;border-radius:18px;width:100%;max-width:880px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,0.25);font-family:var(--font-sans);">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px 14px;border-bottom:1px solid var(--wl-line,#e3e6e9);">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span style="width:38px;height:38px;border-radius:10px;background:rgba(0,216,142,0.12);color:var(--wl-mint-600,#00b56e);display:inline-flex;align-items:center;justify-content:center;"><i class="ph ph-bookmark-simple" style="font-size:20px"></i></span>
+        <div>
+          <div style="font-size:16px;font-weight:800;color:var(--wl-ink);letter-spacing:-0.01em;">Smart Glossary</div>
+          <div style="font-size:11.5px;color:var(--wl-mute,#94a3b8);margin-top:2px;">12 approved terms · auto-applied on every translation</div>
+        </div>
+      </div>
+      <button onclick="closeClientGlossary()" style="width:32px;height:32px;border-radius:50%;border:none;background:rgba(0,0,0,0.06);cursor:pointer;font-size:18px;line-height:1;color:#555;">×</button>
+    </div>
+
+    <!-- Body -->
+    <div style="padding:18px 24px;overflow-y:auto;flex:1;">
+      <!-- Upload zone -->
+      <div id="cp-gloss-upload-zone" style="border:1.5px dashed var(--wl-line,#e3e6e9);border-radius:12px;padding:18px 20px;display:flex;align-items:center;gap:14px;background:#fafbfc;margin-bottom:18px;">
+        <span style="width:40px;height:40px;border-radius:10px;background:rgba(0,216,142,0.10);color:var(--wl-mint-600,#00b56e);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="ph ph-upload-simple" style="font-size:20px"></i></span>
+        <div style="flex:1;min-width:0;">
+          <div id="cp-gloss-upload-title" style="font-size:13.5px;font-weight:700;color:var(--wl-ink);">Upload a glossary</div>
+          <div id="cp-gloss-upload-sub" style="font-size:11.5px;color:var(--wl-mute,#94a3b8);margin-top:2px;">CSV, TBX, or XLSX · source / target columns · we'll auto-detect language pairs</div>
+        </div>
+        <label style="padding:9px 16px;background:var(--wl-mint-500,#00d88e);color:#050608;border-radius:9px;font-size:12.5px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
+          <i class="ph ph-folder-open" style="font-size:14px"></i> Choose file
+          <input type="file" id="cp-gloss-upload-input" accept=".csv,.tbx,.xlsx,.tsv,.txt" style="display:none;" onchange="onClientGlossaryUpload(this)">
+        </label>
+      </div>
+
+      <!-- Search + add -->
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;">
+        <div style="flex:1;position:relative;">
+          <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--wl-mute-2,#7e848d);"><i class="ph ph-magnifying-glass" style="font-size:14px"></i></span>
+          <input type="text" placeholder="Search glossary terms…" style="width:100%;padding:9px 12px 9px 34px;border:1px solid var(--wl-line,#e3e6e9);border-radius:9px;font-size:13px;background:#fafbfc;">
+        </div>
+        <button style="padding:9px 14px;background:rgba(0,216,142,0.10);color:var(--wl-mint-600,#00b56e);border:1px solid rgba(0,216,142,0.35);border-radius:9px;font-size:12.5px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;"><i class="ph ph-plus" style="font-size:14px"></i> Add term</button>
+      </div>
+
+      <!-- Term pairs grid -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;">
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fafbfc;border:1px solid var(--wl-line,#e3e6e9);border-radius:9px;font-size:13px;"><span style="font-weight:700;color:var(--wl-ink);">narrator</span><i class="ph ph-arrow-right" style="font-size:11px;color:var(--wl-mute-2,#7e848d);"></i><span style="color:var(--wl-mint-600,#00b56e);font-weight:600;">Erzähler</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--wl-mute-2);text-transform:uppercase;">DE</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fafbfc;border:1px solid var(--wl-line,#e3e6e9);border-radius:9px;font-size:13px;"><span style="font-weight:700;color:var(--wl-ink);">subtitle</span><i class="ph ph-arrow-right" style="font-size:11px;color:var(--wl-mute-2,#7e848d);"></i><span style="color:var(--wl-mint-600,#00b56e);font-weight:600;">Untertitel</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--wl-mute-2);text-transform:uppercase;">DE</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fafbfc;border:1px solid var(--wl-line,#e3e6e9);border-radius:9px;font-size:13px;"><span style="font-weight:700;color:var(--wl-ink);">compliance</span><i class="ph ph-arrow-right" style="font-size:11px;color:var(--wl-mute-2,#7e848d);"></i><span style="color:var(--wl-mint-600,#00b56e);font-weight:600;">cumplimiento</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--wl-mute-2);text-transform:uppercase;">ES</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fafbfc;border:1px solid var(--wl-line,#e3e6e9);border-radius:9px;font-size:13px;"><span style="font-weight:700;color:var(--wl-ink);">onboarding</span><i class="ph ph-arrow-right" style="font-size:11px;color:var(--wl-mute-2,#7e848d);"></i><span style="color:var(--wl-mint-600,#00b56e);font-weight:600;">intégration</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--wl-mute-2);text-transform:uppercase;">FR</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fafbfc;border:1px solid var(--wl-line,#e3e6e9);border-radius:9px;font-size:13px;"><span style="font-weight:700;color:var(--wl-ink);">stakeholder</span><i class="ph ph-arrow-right" style="font-size:11px;color:var(--wl-mute-2,#7e848d);"></i><span style="color:var(--wl-mint-600,#00b56e);font-weight:600;">Beteiligte</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--wl-mute-2);text-transform:uppercase;">DE</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fafbfc;border:1px solid var(--wl-line,#e3e6e9);border-radius:9px;font-size:13px;"><span style="font-weight:700;color:var(--wl-ink);">code of conduct</span><i class="ph ph-arrow-right" style="font-size:11px;color:var(--wl-mute-2,#7e848d);"></i><span style="color:var(--wl-mint-600,#00b56e);font-weight:600;">código de conducta</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--wl-mute-2);text-transform:uppercase;">ES</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fafbfc;border:1px solid var(--wl-line,#e3e6e9);border-radius:9px;font-size:13px;"><span style="font-weight:700;color:var(--wl-ink);">training module</span><i class="ph ph-arrow-right" style="font-size:11px;color:var(--wl-mute-2,#7e848d);"></i><span style="color:var(--wl-mint-600,#00b56e);font-weight:600;">trainingsmodule</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--wl-mute-2);text-transform:uppercase;">NL</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fafbfc;border:1px solid var(--wl-line,#e3e6e9);border-radius:9px;font-size:13px;"><span style="font-weight:700;color:var(--wl-ink);">policy</span><i class="ph ph-arrow-right" style="font-size:11px;color:var(--wl-mute-2,#7e848d);"></i><span style="color:var(--wl-mint-600,#00b56e);font-weight:600;">정책</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--wl-mute-2);text-transform:uppercase;">KO</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fafbfc;border:1px solid var(--wl-line,#e3e6e9);border-radius:9px;font-size:13px;"><span style="font-weight:700;color:var(--wl-ink);">workflow</span><i class="ph ph-arrow-right" style="font-size:11px;color:var(--wl-mute-2,#7e848d);"></i><span style="color:var(--wl-mint-600,#00b56e);font-weight:600;">ワークフロー</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--wl-mute-2);text-transform:uppercase;">JA</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CLIENT TM (TRANSLATION MEMORY) MODAL ═══ -->
+<div id="cp-tm-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.45);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:24px;">
+  <div style="background:#fff;border-radius:18px;width:100%;max-width:560px;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,0.25);font-family:var(--font-sans);">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px 14px;border-bottom:1px solid var(--wl-line,#e3e6e9);">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span style="width:38px;height:38px;border-radius:10px;background:rgba(0,216,142,0.12);color:var(--wl-mint-600,#00b56e);display:inline-flex;align-items:center;justify-content:center;"><i class="ph ph-database" style="font-size:20px"></i></span>
+        <div>
+          <div style="font-size:16px;font-weight:800;color:var(--wl-ink);letter-spacing:-0.01em;">Translation Memory</div>
+          <div style="font-size:11.5px;color:var(--wl-mute,#94a3b8);margin-top:2px;">Upload a TMX file to leverage your past translations on new projects</div>
+        </div>
+      </div>
+      <button onclick="closeClientTM()" style="width:32px;height:32px;border-radius:50%;border:none;background:rgba(0,0,0,0.06);cursor:pointer;font-size:18px;line-height:1;color:#555;">×</button>
+    </div>
+
+    <!-- Body -->
+    <div style="padding:22px 24px;">
+      <div id="cp-tm-upload-zone" style="border:1.5px dashed var(--wl-line,#e3e6e9);border-radius:12px;padding:28px 22px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;background:#fafbfc;">
+        <span style="width:48px;height:48px;border-radius:12px;background:rgba(0,216,142,0.10);color:var(--wl-mint-600,#00b56e);display:inline-flex;align-items:center;justify-content:center;"><i class="ph ph-upload-simple" style="font-size:22px"></i></span>
+        <div id="cp-tm-upload-title" style="font-size:14px;font-weight:700;color:var(--wl-ink);">Drop a TMX file or browse</div>
+        <div id="cp-tm-upload-sub" style="font-size:12px;color:var(--wl-mute,#94a3b8);line-height:1.5;max-width:380px;">Supports <code style="font-family:var(--font-mono);font-size:11px;background:rgba(0,0,0,0.05);padding:1px 5px;border-radius:4px;">.tmx</code>, <code style="font-family:var(--font-mono);font-size:11px;background:rgba(0,0,0,0.05);padding:1px 5px;border-radius:4px;">.csv</code>, or <code style="font-family:var(--font-mono);font-size:11px;background:rgba(0,0,0,0.05);padding:1px 5px;border-radius:4px;">.xliff</code>. We'll match segments above 75% similarity and apply leverage automatically on every translation.</div>
+        <label style="margin-top:6px;padding:10px 20px;background:var(--wl-mint-500,#00d88e);color:#050608;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
+          <i class="ph ph-folder-open" style="font-size:14px"></i> Choose TM file
+          <input type="file" id="cp-tm-upload-input" accept=".tmx,.csv,.xliff,.tsv,.xlsx" style="display:none;" onchange="onClientTMUpload(this)">
+        </label>
+      </div>
+      <div style="margin-top:14px;font-size:11.5px;color:var(--wl-mute-2,#7e848d);text-align:center;line-height:1.6;">Don't have one yet? Your TM builds automatically as you complete projects.</div>
     </div>
   </div>
 </div>
@@ -40208,6 +40305,39 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     <div class="dash-project-list" id="dash-project-list">
     </div>
     </div><!-- /dash-projects-section -->
+
+    <!-- Smart Glossary (mirror of agency view — read-only visual on client dash) -->
+    <div id="dash-glossary-section" style="margin-top:36px;">
+      <div class="dash-projects-hdr" style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+        <span class="ico-sm" style="color:var(--wl-mint-500,#00d88e);display:inline-flex;align-items:center"><i class="ph ph-bookmark-simple" style="font-size:18px"></i></span>
+        <h3 style="margin:0">Smart Glossary</h3>
+        <span style="font-family:var(--font-mono,'JetBrains Mono',monospace);font-size:10px;font-weight:700;letter-spacing:.12em;color:var(--wl-mute-2,#7e848d);background:rgba(0,216,142,0.08);border:1px solid rgba(0,216,142,0.25);padding:3px 9px;border-radius:999px;text-transform:uppercase;">Project · EN → All</span>
+        <span style="flex:1"></span>
+        <span style="font-family:var(--font-sans);font-size:12px;color:var(--wl-mute,#94a3b8);">12 approved terms · auto-applied on every translation</span>
+      </div>
+      <div style="background:#fff;border:1px solid var(--wl-line,#e3e6e9);border-radius:14px;padding:18px 20px;box-shadow:0 1px 3px rgba(10,10,10,0.04);">
+        <!-- Search + add row -->
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;">
+          <div style="flex:1;position:relative;">
+            <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--wl-mute-2,#7e848d);"><i class="ph ph-magnifying-glass" style="font-size:14px"></i></span>
+            <input type="text" placeholder="Search glossary terms…" style="width:100%;padding:9px 12px 9px 34px;border:1px solid var(--wl-line,#e3e6e9);border-radius:9px;font-family:var(--font-sans);font-size:13px;background:#fafbfc;">
+          </div>
+          <button style="padding:9px 14px;background:rgba(0,216,142,0.10);color:var(--wl-mint-600,#00b56e);border:1px solid rgba(0,216,142,0.35);border-radius:9px;font-family:var(--font-sans);font-size:12.5px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;"><i class="ph ph-plus" style="font-size:14px"></i> Add term</button>
+        </div>
+        <!-- Term pairs grid — visual mirror of the agency Smart Glossary -->
+        <div id="dash-glossary-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;">
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fafbfc;border:1px solid var(--wl-line,#e3e6e9);border-radius:9px;font-family:var(--font-sans);font-size:13px;"><span style="font-weight:700;color:var(--wl-ink);">narrator</span><i class="ph ph-arrow-right" style="font-size:11px;color:var(--wl-mute-2,#7e848d);"></i><span style="color:var(--wl-mint-600,#00b56e);font-weight:600;">Erzähler</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--wl-mute-2);text-transform:uppercase;">DE</span></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fafbfc;border:1px solid var(--wl-line,#e3e6e9);border-radius:9px;font-family:var(--font-sans);font-size:13px;"><span style="font-weight:700;color:var(--wl-ink);">subtitle</span><i class="ph ph-arrow-right" style="font-size:11px;color:var(--wl-mute-2,#7e848d);"></i><span style="color:var(--wl-mint-600,#00b56e);font-weight:600;">Untertitel</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--wl-mute-2);text-transform:uppercase;">DE</span></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fafbfc;border:1px solid var(--wl-line,#e3e6e9);border-radius:9px;font-family:var(--font-sans);font-size:13px;"><span style="font-weight:700;color:var(--wl-ink);">compliance</span><i class="ph ph-arrow-right" style="font-size:11px;color:var(--wl-mute-2,#7e848d);"></i><span style="color:var(--wl-mint-600,#00b56e);font-weight:600;">cumplimiento</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--wl-mute-2);text-transform:uppercase;">ES</span></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fafbfc;border:1px solid var(--wl-line,#e3e6e9);border-radius:9px;font-family:var(--font-sans);font-size:13px;"><span style="font-weight:700;color:var(--wl-ink);">onboarding</span><i class="ph ph-arrow-right" style="font-size:11px;color:var(--wl-mute-2,#7e848d);"></i><span style="color:var(--wl-mint-600,#00b56e);font-weight:600;">intégration</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--wl-mute-2);text-transform:uppercase;">FR</span></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fafbfc;border:1px solid var(--wl-line,#e3e6e9);border-radius:9px;font-family:var(--font-sans);font-size:13px;"><span style="font-weight:700;color:var(--wl-ink);">stakeholder</span><i class="ph ph-arrow-right" style="font-size:11px;color:var(--wl-mute-2,#7e848d);"></i><span style="color:var(--wl-mint-600,#00b56e);font-weight:600;">Beteiligte</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--wl-mute-2);text-transform:uppercase;">DE</span></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fafbfc;border:1px solid var(--wl-line,#e3e6e9);border-radius:9px;font-family:var(--font-sans);font-size:13px;"><span style="font-weight:700;color:var(--wl-ink);">code of conduct</span><i class="ph ph-arrow-right" style="font-size:11px;color:var(--wl-mute-2,#7e848d);"></i><span style="color:var(--wl-mint-600,#00b56e);font-weight:600;">código de conducta</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--wl-mute-2);text-transform:uppercase;">ES</span></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fafbfc;border:1px solid var(--wl-line,#e3e6e9);border-radius:9px;font-family:var(--font-sans);font-size:13px;"><span style="font-weight:700;color:var(--wl-ink);">training module</span><i class="ph ph-arrow-right" style="font-size:11px;color:var(--wl-mute-2,#7e848d);"></i><span style="color:var(--wl-mint-600,#00b56e);font-weight:600;">trainingsmodule</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--wl-mute-2);text-transform:uppercase;">NL</span></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fafbfc;border:1px solid var(--wl-line,#e3e6e9);border-radius:9px;font-family:var(--font-sans);font-size:13px;"><span style="font-weight:700;color:var(--wl-ink);">policy</span><i class="ph ph-arrow-right" style="font-size:11px;color:var(--wl-mute-2,#7e848d);"></i><span style="color:var(--wl-mint-600,#00b56e);font-weight:600;">정책</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--wl-mute-2);text-transform:uppercase;">KO</span></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fafbfc;border:1px solid var(--wl-line,#e3e6e9);border-radius:9px;font-family:var(--font-sans);font-size:13px;"><span style="font-weight:700;color:var(--wl-ink);">workflow</span><i class="ph ph-arrow-right" style="font-size:11px;color:var(--wl-mute-2,#7e848d);"></i><span style="color:var(--wl-mint-600,#00b56e);font-weight:600;">ワークフロー</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--wl-mute-2);text-transform:uppercase;">JA</span></div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -41615,6 +41745,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       <span><b id="trv-approved-count">0</b> of <b id="trv-total-langs">1</b> approved</span>
       <div class="trv-prog-bar"><div class="trv-prog-fill" id="trv-prog-fill" style="width:0%"></div></div>
     </div>
+    <button id="trv-send-linguist-btn" onclick="sendJobToLinguist()" style="display:none;padding:11px 22px;background:rgba(0,216,142,0.08);color:var(--mint-500,#00d88e);border:1.5px solid rgba(0,216,142,0.4);border-radius:999px;font-family:var(--font-sans);font-size:13px;font-weight:700;cursor:pointer;align-items:center;gap:8px;margin-right:10px;"><i class="ph ph-paper-plane-tilt" style="font-size:15px"></i> Send to Linguist</button>
+    <button id="trv-send-producer-btn" onclick="sendJobBackToProducer()" style="display:none;padding:11px 22px;background:rgba(124,58,237,0.08);color:#7c3aed;border:1.5px solid rgba(124,58,237,0.4);border-radius:999px;font-family:var(--font-sans);font-size:13px;font-weight:700;cursor:pointer;align-items:center;gap:8px;margin-right:10px;"><i class="ph ph-arrow-u-up-left" style="font-size:15px"></i> Send back to Producer</button>
     <button class="trv-btn-primary" id="trv-approve-btn">Approve &amp; Continue <i class="ph-bold ph-arrow-right"></i></button>
   </div>
 </div>
@@ -41906,7 +42038,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 #synthvo-screen .svn-lang.configured .l-status{background:var(--mint-500,#00d88e);color:var(--ink,#050608);}
 #synthvo-screen .svn-lang.active .l-status{background:transparent;border:1px dashed rgba(255,255,255,.25);color:rgba(255,255,255,.5);}
 #synthvo-screen .svn-lang.active.configured .l-status{background:var(--mint-500,#00d88e);color:var(--ink,#050608);}
-#synthvo-screen .svn-shell{display:grid;grid-template-columns:1fr 360px;gap:16px;align-items:start;margin-bottom:24px;}
+#synthvo-screen .svn-shell{display:grid;grid-template-columns:1fr 460px;gap:20px;align-items:start;margin-bottom:24px;}
 #synthvo-screen .svn-frame{background:#fff;border:1px solid var(--line,#e6e8ec);border-radius:14px;padding:18px;}
 #synthvo-screen .svn-frame-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;}
 #synthvo-screen .svn-frame-title{font-size:15px;font-weight:600;letter-spacing:-.005em;}
@@ -41932,7 +42064,18 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 #synthvo-screen .svn-seg{display:inline-flex;gap:2px;background:var(--paper,#f7f8f9);border-radius:10px;padding:3px;}
 #synthvo-screen .svn-seg button{font:inherit;font-size:12px;font-weight:500;padding:6px 11px;border-radius:8px;border:0;background:transparent;color:var(--text-2,#4b5159);cursor:pointer;display:inline-flex;align-items:center;gap:4px;}
 #synthvo-screen .svn-seg button.on{background:var(--ink,#050608);color:#fff;font-weight:600;}
-#synthvo-screen .svn-voice-card{display:grid;grid-template-columns:32px 1fr auto;gap:10px;align-items:center;padding:9px 11px;border:1.5px solid var(--line,#e6e8ec);border-radius:10px;margin-bottom:6px;background:#fff;cursor:pointer;transition:all 160ms ease;position:relative;}
+#synthvo-screen .svn-voice-card{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 18px;border:1.5px solid var(--line,#e6e8ec);border-radius:12px;margin-bottom:10px;background:#fff;transition:all 160ms ease;position:relative;min-width:0;}
+#synthvo-screen .svn-voice-card>div:nth-of-type(1){flex:1;min-width:160px;}
+#synthvo-screen .svn-voice-card>div:nth-of-type(2){display:inline-flex;align-items:center;gap:10px;flex-shrink:0;}
+#synthvo-screen .svn-voice-card button{flex-shrink:0;}
+#synthvo-screen .svn-voice-card.vp-playing{border-color:var(--mint-500,#00d88e);box-shadow:0 0 0 3px rgba(0,216,142,.12);}
+/* Mini equaliser bars shown inside the "Playing…" pill */
+.vp-eq{display:inline-flex;align-items:flex-end;gap:2px;height:12px;}
+.vp-eq>span{display:block;width:3px;background:currentColor;border-radius:1px;animation:vpEq 0.9s ease-in-out infinite;}
+.vp-eq>span:nth-child(1){height:60%;animation-delay:-0.3s;}
+.vp-eq>span:nth-child(2){height:100%;animation-delay:-0.15s;}
+.vp-eq>span:nth-child(3){height:75%;}
+@keyframes vpEq{0%,100%{transform:scaleY(0.4);}50%{transform:scaleY(1);}}
 #synthvo-screen .svn-voice-card:hover{border-color:var(--line-2,#d9dde2);}
 #synthvo-screen .svn-voice-card.sel{border-color:var(--mint-500,#00d88e);background:linear-gradient(180deg,#fff,#fafffb);box-shadow:0 0 0 3px rgba(0,216,142,.16);}
 #synthvo-screen .svn-voice-av{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--w-font-mono);font-weight:700;font-size:11px;background:linear-gradient(135deg,#0a4d4d,#127070);color:#fff;}
@@ -43350,6 +43493,68 @@ function getIntakeSteps(){
   return steps;
 }
 
+// ─── CLIENT GLOSSARY MODAL ───────────────────────────────────────────────────
+// Visual mirror of the agency Smart Glossary. Not wired to any real backing
+// store — the upload accepts a file and shows a success state so the demo
+// reads like a functioning feature, but no terms are actually parsed.
+function openClientGlossary(){
+  const m = document.getElementById('cp-glossary-modal');
+  if(!m) return;
+  m.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function closeClientGlossary(){
+  const m = document.getElementById('cp-glossary-modal');
+  if(!m) return;
+  m.style.display = 'none';
+  document.body.style.overflow = '';
+}
+function onClientGlossaryUpload(input){
+  const file = input && input.files && input.files[0];
+  if(!file) return;
+  const title = document.getElementById('cp-gloss-upload-title');
+  const sub   = document.getElementById('cp-gloss-upload-sub');
+  if(title) title.innerHTML = `<i class="ph ph-check-circle" style="color:#00d88e;margin-right:6px;"></i>Imported <strong>${file.name}</strong>`;
+  if(sub)   sub.textContent = `${(file.size/1024).toFixed(1)} KB · parsing source/target pairs… you'll get a summary email when it's ready.`;
+  toast(`Glossary "${file.name}" received — we'll let you know when it's processed`, 'success', 4500);
+}
+// Close glossary modal on backdrop click
+document.addEventListener('click', e => {
+  const m = document.getElementById('cp-glossary-modal');
+  if(m && e.target === m) closeClientGlossary();
+});
+
+// ─── CLIENT TM (TRANSLATION MEMORY) MODAL ────────────────────────────────────
+// Visual placeholder for TMX upload. Accepts a file and confirms success
+// — no real parsing or storage, but signals that TM leverage is part of the
+// service.
+function openClientTM(){
+  const m = document.getElementById('cp-tm-modal');
+  if(!m) return;
+  m.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function closeClientTM(){
+  const m = document.getElementById('cp-tm-modal');
+  if(!m) return;
+  m.style.display = 'none';
+  document.body.style.overflow = '';
+}
+function onClientTMUpload(input){
+  const file = input && input.files && input.files[0];
+  if(!file) return;
+  const title = document.getElementById('cp-tm-upload-title');
+  const sub   = document.getElementById('cp-tm-upload-sub');
+  if(title) title.innerHTML = `<i class="ph ph-check-circle" style="color:#00d88e;margin-right:6px;"></i>Imported <strong>${file.name}</strong>`;
+  if(sub)   sub.textContent = `${(file.size/1024).toFixed(1)} KB · indexing translation units… leverage will kick in on your next project.`;
+  toast(`TM "${file.name}" received — indexing now`, 'success', 4500);
+}
+// Close TM modal on backdrop click
+document.addEventListener('click', e => {
+  const m = document.getElementById('cp-tm-modal');
+  if(m && e.target === m) closeClientTM();
+});
+
 function showIntake(){
   cp.step=1;
   cp.draft={ tier:null, smartMode:'both', smartWorkMode:'guided', voQuality:'medium', subsMode:'closed', tgtLangs:[], srcLang:'en', contentType:'video', selectedScope:[], langGroup:'B', projectName:'', deadline:'', notes:'', files:[], intakeVoice:null };
@@ -44198,8 +44403,17 @@ function goNext(){ const t=getIntakeSteps().length; if(cp.step<t){ cp.step++; re
 function goBack(){ if(cp.step>1){ cp.step--; renderIntake(); window.scrollTo(0,0); } }
 
 // Step 2 validate-then-advance (replaces disabled button)
-function goNextStep2(){
+function goNextStep2(event){
+  // Force-blur whatever has focus so any input still in edit mode (e.g.
+  // the language picker search field) flushes its value into the draft
+  // before validation runs. This fixes the "had to click twice" symptom
+  // where the first click was blurring the input and the second click
+  // was actually triggering navigation.
+  if(document.activeElement && document.activeElement.blur){
+    try { document.activeElement.blur(); } catch(e){}
+  }
   const d = cp.draft;
+  console.log('[goNextStep2] tgtLangs=', d.tgtLangs);
   if(!d.tgtLangs || !d.tgtLangs.length){
     // Scroll to and flash the lang picker
     const wrap = document.getElementById('lang-picker-wrap');
@@ -45150,13 +45364,13 @@ function enterRouting(){
       <div class="routing-card-desc" id="rc-az-desc">${opalDesc}</div>
       <span class="routing-card-badge org">${opalBadge}</span>
     </div>
-    <div class="tile-sweep routing-card rc-primary" onclick="doRouteOpal()">
+    <div class="tile-sweep routing-card rc-primary" id="rc-aihuman-card" onclick="doRouteOpal()">
       <div class="routing-card-icon"><i class="ph ph-user-check"></i></div>
       <div class="routing-card-title">Opal AI Translation + Human Review</div>
       <div class="routing-card-desc">${aiHumanDesc}</div>
       <span class="routing-card-badge grn">Recommended</span>
     </div>
-    <div class="tile-sweep routing-card rc-human" onclick="doRouteHuman()">
+    <div class="tile-sweep routing-card rc-human" id="rc-human-card" onclick="doRouteHuman()">
       <div class="routing-card-icon"><i class="ph ph-crown-simple"></i></div>
       <div class="routing-card-title">Full Human</div>
       <div class="routing-card-desc">${humanDesc}</div>
@@ -45177,11 +45391,17 @@ function enterRouting(){
   setStepper(getScreenStep('routing-screen'));
 }
 
-async function routingAzureTranslate(){
-  const card = $('rc-az-card');
-  const icon = $('rc-az-icon');
-  const title = $('rc-az-title');
-  const desc = $('rc-az-desc');
+async function routingAzureTranslate(srcCardId){
+  // srcCardId lets callers (doRouteOpal / doRouteHuman) tell us which card
+  // the user actually clicked, so the loading animation lights up the right
+  // tile instead of always falling back to the first one.
+  const cardId = srcCardId || 'rc-az-card';
+  const card = $(cardId);
+  // Title/icon/desc IDs only exist on the first card — if we're animating
+  // any other card, fall back to in-card text manipulation below.
+  const icon = (cardId === 'rc-az-card') ? $('rc-az-icon')  : null;
+  const title = (cardId === 'rc-az-card') ? $('rc-az-title') : (card && card.querySelector('.routing-card-title'));
+  const desc  = (cardId === 'rc-az-card') ? $('rc-az-desc')  : (card && card.querySelector('.routing-card-desc'));
   // Translate all target languages (up to 5)
   const allLangs = (st.tgts && st.tgts.length) ? st.tgts.slice(0,5) : [st.tgt||'es'];
   st.transPerLang = {};
@@ -45201,9 +45421,11 @@ async function routingAzureTranslate(){
     if(card){ card.classList.remove('az-running'); card.classList.add('az-done'); }
     if(icon) icon.textContent = '✓';
     if(title) title.textContent = 'Translation Complete';
-    if(desc) desc.textContent = `${allLangs.length} language${allLangs.length>1?'s':''} translated — proceeding to delivery…`;
+    if(desc) desc.textContent = `${allLangs.length} language${allLangs.length>1?'s':''} translated — opening review…`;
     toast(`Translation complete — ${allLangs.length} language${allLangs.length>1?'s':''}`, 'success');
-    setTimeout(()=>enterDelivery(), 900);
+    // All three routing cards converge here — always land on the side-by-side
+    // translation review screen so the agency can edit + send to linguist.
+    setTimeout(()=>enterTranslationReview(), 900);
   } catch(e){
     if(card){ card.classList.remove('az-running'); }
     if(title) title.textContent = 'Opal AI Translation';
@@ -45214,16 +45436,81 @@ async function routingAzureTranslate(){
 
 function doRouteClientReview(){
   toast('Transcript shared with client via Client Portal — awaiting approval','success',4500);
-  // Mark job as awaiting review
   if(bkState.currentJobId) updateJob(bkState.currentJobId, {status:'in_review'});
   openDashboard();
 }
-function doRouteOpal(){ enterOpal(); }
+
+// Send the current job to the linguist queue. Called from the "Send to
+// Linguist" button on the side-by-side translation review screen. The job's
+// status flips to 'in_review' AND we flag linguistAssigned so the linguist
+// agency dashboard can filter exclusively on these jobs.
+function sendJobToLinguist(){
+  const jobId = bkState.currentJobId || st.jobId;
+  if(!jobId){
+    toast('No active job — cannot route to linguist','#e53e3e',4500);
+    return;
+  }
+  // Snapshot current per-language translations into the job so the linguist
+  // sees what the agency has produced so far.
+  const linguistSnapshot = {
+    transPerLang: st.transPerLang ? JSON.parse(JSON.stringify(st.transPerLang)) : {},
+    segs: (st.segs||[]).map(s => ({
+      id: s.id, start: s.start, end: s.end,
+      orig: s.orig, trans: s.trans, tgt: s.tgt,
+    })),
+    sentAt: new Date().toISOString(),
+  };
+  updateJob(jobId, {
+    status: 'in_review',
+    linguistAssigned: true,
+    linguistSentAt: new Date().toISOString(),
+    linguistSnapshot,
+  });
+  toast('Sent to linguist queue — they will see it on their next login', 'success', 4500);
+  setTimeout(() => openDashboard(), 1200);
+}
+
+// Linguist's mirror of sendJobToLinguist: hand the job BACK to the producer
+// once translation post-edit is done. Clears the linguistAssigned flag so the
+// linguist queue stops showing it, and snapshots the linguist's edits onto
+// the job record for the producer to pick up.
+function sendJobBackToProducer(){
+  const jobId = bkState.currentJobId || st.jobId;
+  if(!jobId){
+    toast('No active job — cannot route to producer','#e53e3e',4500);
+    return;
+  }
+  // Snapshot the linguist's post-edited translations onto the job record.
+  const producerHandoff = {
+    transPerLang: st.transPerLang ? JSON.parse(JSON.stringify(st.transPerLang)) : {},
+    segs: (st.segs||[]).map(s => ({
+      id: s.id, start: s.start, end: s.end,
+      orig: s.orig, trans: s.trans, tgt: s.tgt,
+    })),
+    returnedAt: new Date().toISOString(),
+    returnedBy: (typeof bkState !== 'undefined' && bkState && bkState.user) || 'linguist',
+  };
+  updateJob(jobId, {
+    status: 'qa',                  // back in producer hands for QA / next step
+    linguistAssigned: false,       // removes from linguist queue
+    linguistCompleted: true,
+    linguistCompletedAt: new Date().toISOString(),
+    producerHandoff,
+  });
+  toast('Sent back to producer — they can pick it up from QA', 'success', 4500);
+  setTimeout(() => openDashboard(), 1200);
+}
+// All three primary routing cards now run the same flow: translate every
+// language, then drop the user on the side-by-side translation review where
+// they can edit and "Send to Linguist". This replaces the earlier divergence
+// where two cards went to a manual single-language Opal screen instead.
+function doRouteOpal(){ routingAzureTranslate('rc-aihuman-card'); }
 function doRouteDirect(){ enterDelivery(); }
-function doRouteHuman(){ enterOpal(); }
+function doRouteHuman(){ routingAzureTranslate('rc-human-card'); }
 
 // ─── SMART auto-translate (bypasses routing choice screen) ────────────────────
 async function enterSmartAutoTranslate(){
+  console.log('[smartAuto] ENTRY · tier=', st.tier, 'mode=', st.smartMode, 'workMode=', st.smartWorkMode, 'tgts=', st.tgts, 'segCount=', (st.segs||[]).length, 'hasFile=', !!st.file);
   // Clear any active cp-screens (intake, etc.) so they don't render behind
   // the studio screens — show() deliberately leaves cp-screens alone, but
   // the auto-mode transition from intake → opal needs them gone.
@@ -45360,6 +45647,15 @@ function enterTranslationReview(){
   _trvSetShare(false);
 
   show('translation-review-screen');
+  // Show role-appropriate footer button.
+  //   - MM Producer (or client/no-role): "Send to Linguist"
+  //   - Linguist: "Send back to Producer"
+  //   - QA / others: neither (just Approve & Continue)
+  const role     = (typeof bkState !== 'undefined' && bkState && bkState.role) || null;
+  const toLing   = $('trv-send-linguist-btn');
+  const toProd   = $('trv-send-producer-btn');
+  if(toLing) toLing.style.display = (role === 'linguist') ? 'none' : 'inline-flex';
+  if(toProd) toProd.style.display = (role === 'linguist') ? 'inline-flex' : 'none';
   if(typeof lucide !== 'undefined') lucide.createIcons();
 }
 
@@ -47309,7 +47605,14 @@ function doBackendLogout(){
 }
 
 function renderJobQueue(){
-  const jobs = getJobs().filter(j=>!j.selfService); // SMART self-service jobs never appear here
+  // Base filter: SMART self-service jobs never appear in the agency queue.
+  // Then narrow further based on the logged-in agency role:
+  //   - linguist  → ONLY jobs explicitly sent to linguist (linguistAssigned)
+  //   - mm / qa  → all non-self-service jobs
+  let jobs = getJobs().filter(j=>!j.selfService);
+  if(bkState.role === 'linguist'){
+    jobs = jobs.filter(j => j.linguistAssigned === true);
+  }
   const statuses = ['all','submitted','in_review','in_progress','qa','ready_for_review','delivered'];
   const counts = {};
   statuses.forEach(s=>{ counts[s] = s==='all' ? jobs.length : jobs.filter(j=>j.status===s).length; });
@@ -47452,6 +47755,27 @@ function openJobFromQueue(id){
     // back, but at minimum the language config + completion state is
     // preserved.
     _reopenDeliveredJob(j);
+    return;
+  }
+  // Linguist opening a job that was routed to them: skip the entire ASR /
+  // routing pipeline and land directly on the side-by-side translation
+  // review screen, with the producer's snapshot pre-loaded so they can
+  // immediately edit translations.
+  if(bkState.role === 'linguist' && j.linguistAssigned && j.linguistSnapshot){
+    const snap = j.linguistSnapshot;
+    if(snap.segs && snap.segs.length){
+      st.segs = snap.segs.map(s => ({
+        id: s.id, start: s.start, end: s.end,
+        orig: s.orig, tgt: s.tgt, trans: s.trans, note: '',
+        spkr: 'Narrator', qs: 92,
+      }));
+    }
+    if(snap.transPerLang) st.transPerLang = JSON.parse(JSON.stringify(snap.transPerLang));
+    st.wfStep = 3;
+    setTimeout(() => {
+      toast(`Opened: ${j.projectName} · review translations and send back to producer`, 'info', 5000);
+    }, 300);
+    enterTranslationReview();
     return;
   }
   if(st.tier === 'smart' && st.smartWorkMode === 'auto'){
@@ -47795,8 +48119,13 @@ ${JSON.stringify(items, null, 2)}`;
     while(attempt < 2 && !parsed){
       attempt++;
       try {
+        // 30-second hard timeout per attempt — without this, a hung fetch
+        // would keep the auto-translate progress bar frozen forever.
+        const ctrl = new AbortController();
+        const _timeout = setTimeout(() => ctrl.abort('timeout'), 30000);
         const r = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
+          signal: ctrl.signal,
           headers: {
             'x-api-key': key,
             'anthropic-version': '2023-06-01',
@@ -47809,7 +48138,7 @@ ${JSON.stringify(items, null, 2)}`;
             system: systemMsg,
             messages: [{ role:'user', content: userMsg }],
           }),
-        });
+        }).finally(() => clearTimeout(_timeout));
         if(!r.ok){
           const e = await r.json().catch(()=>({}));
           throw new Error(e.error?.message || `Claude API ${r.status}`);
@@ -48762,6 +49091,10 @@ function enterCaptionsReEdit(){
   const onSuccess = document.getElementById('success-screen')?.classList.contains('active');
   st.captionsReEditFromScreen = onSuccess ? 'success-screen' : 'synthvo-screen';
   st.captionsReEditMode = true;
+  // Clear any active cp-screens (success-screen lives inside #cp-screens
+  // which show() deliberately ignores) so the studio transcript-screen
+  // isn't rendered behind/beneath them.
+  document.querySelectorAll('#cp-screens .screen').forEach(s => s.classList.remove('active'));
 
   // Reset per-language download state so the user explicitly re-approves each lang.
   st.captionsDl = {};
@@ -49471,7 +49804,10 @@ function enterOpal(){
   const stepN = getScreenStep('opal-screen');
   const lbl = $('op-step-lbl'); if(lbl) lbl.textContent = stepN;
   show('opal-screen');
-  $('opal-screen').classList.add('opal-loading');
+  // Do NOT add .opal-loading here — that class hides the form + Translate
+  // button, which leaves the user with nothing to click. Loading state is
+  // applied inside the op-send click handler once translation actually starts.
+  $('opal-screen').classList.remove('opal-loading');
   lucide.createIcons();
   startOpalWordCycle();
   toast('Select quality settings and click Translate with Opal to begin','info',3500);
@@ -49490,6 +49826,9 @@ $('op-send').addEventListener('click', async ()=>{
   }
   const sendBtn=$('op-send');
   sendBtn.disabled=true;
+  // Now that translation is actually running, switch the screen into the
+  // immersive loading view (cycling hero + progress bar, form hidden).
+  $('opal-screen').classList.add('opal-loading');
   $('opal-prog').style.display='block';
   const fill=$('op-fill');
   $('op-msg').textContent='Connecting to Opal A…';
@@ -51712,15 +52051,19 @@ function _renderSvLangTabs(){
 }
 
 function svSwitchLang(lang){
-  // Save current selection before switching
-  if(_svActiveLang && st.voicePerLang) st.voicePerLang[_svActiveLang] = { ...elVoiceSelection };
+  // Save current selection before switching (only if a voice was actually picked).
+  if(_svActiveLang && st.voicePerLang && elVoiceSelection.voiceId){
+    st.voicePerLang[_svActiveLang] = { ...elVoiceSelection };
+  }
   _svActiveLang = lang;
   st.tgt = lang;
-  // Load saved selection for this lang (or default)
-  if(st.voicePerLang && st.voicePerLang[lang]){
+  // Load saved selection for this lang. If none, leave voiceId NULL so the
+  // Save button stays disabled — preselecting a default voice silently was
+  // letting users save without ever explicitly choosing.
+  if(st.voicePerLang && st.voicePerLang[lang] && st.voicePerLang[lang].voiceId){
     elVoiceSelection = { ...st.voicePerLang[lang] };
   } else {
-    elVoiceSelection = { ...EL_PREMADE.f[0], gender:'f' };
+    elVoiceSelection = { voiceId: null, voiceName: null, gender: 'f' };
   }
   vpFilterGender(elVoiceSelection.gender || 'f');
   _renderSvLangTabs();
@@ -51870,15 +52213,30 @@ function renderVoiceCards(){
   if(!container) return;
   const g = elVoiceSelection.gender || 'f';
   const voices = getVoiceList(g);
+  // Cards have TWO explicit actions: a sample-play pill and a select pill.
+  // The currently-sampled voice gets a "Playing…" pill so the user knows
+  // exactly which voice they're hearing.
+  const playingId = _vpPlayingVoiceId;
   container.innerHTML = voices.map(v => {
     const isSel = v.voiceId === elVoiceSelection.voiceId;
-    return `<div class="svn-voice-card${isSel?' sel':''}" onclick="vpSelectVoice('${v.voiceId}','${v.voiceName.replace(/'/g,"\\'")}')">
-      <span class="svn-voice-av">${v.voiceName[0]}</span>
+    const isPlaying = v.voiceId === playingId;
+    const nameEsc = v.voiceName.replace(/'/g,"\\'");
+    const sampleBtn = isPlaying
+      ? `<button onclick="vpStopPreview()" title="Stop sample" style="display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:13px;font-weight:700;padding:9px 16px;border-radius:999px;background:var(--mint-500,#00d88e);border:1px solid var(--mint-500,#00d88e);color:var(--ink,#050608);cursor:pointer;white-space:nowrap;"><span class="vp-eq"><span></span><span></span><span></span></span>Playing…</button>`
+      : `<button onclick="vpPreview('${v.voiceId}')" title="Play a sample of this voice" style="display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:13px;font-weight:600;padding:9px 16px;border-radius:999px;background:#fff;border:1px solid var(--line-2,#d9dde2);color:var(--text-1,#050608);cursor:pointer;white-space:nowrap;"><i class="ph ph-play-fill" style="font-size:13px;color:var(--mint-500,#00d88e)"></i>Hear sample</button>`;
+    const chooseBtn = isSel
+      ? `<button disabled style="display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:13px;font-weight:700;padding:9px 18px;border-radius:999px;background:var(--mint-500,#00d88e);border:1px solid var(--mint-500,#00d88e);color:var(--ink,#050608);cursor:default;white-space:nowrap;"><i class="ph ph-check-bold" style="font-size:12px"></i>Selected</button>`
+      : `<button onclick="vpSelectVoice('${v.voiceId}','${nameEsc}')" title="Use this voice for the current language" style="display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:13px;font-weight:700;padding:9px 18px;border-radius:999px;background:rgba(0,216,142,0.10);border:1px solid rgba(0,216,142,0.40);color:var(--mint-600,#00b56e);cursor:pointer;white-space:nowrap;">Choose voice</button>`;
+    return `<div class="svn-voice-card${isSel?' sel':''}${isPlaying?' vp-playing':''}" style="cursor:default;">
+      <span class="svn-voice-av" style="width:40px;height:40px;font-size:14px;">${v.voiceName[0]}</span>
       <div>
-        <div style="font-size:13px;font-weight:600;letter-spacing:-.005em">${v.voiceName}</div>
-        <div style="font-size:11px;color:var(--text-3,#7e848d);margin-top:1px">${v.desc}</div>
+        <div style="font-size:14px;font-weight:700;letter-spacing:-.01em">${v.voiceName}${isPlaying?' <span style="font-size:11px;font-weight:600;color:var(--mint-600,#00b56e);margin-left:6px;">▸ Now sampling</span>':''}</div>
+        <div style="font-size:12px;color:var(--text-3,#7e848d);margin-top:2px">${v.desc}</div>
       </div>
-      <button onclick="event.stopPropagation();vpPreview('${v.voiceId}')" style="display:inline-flex;align-items:center;gap:5px;font:inherit;font-size:12px;font-weight:600;padding:6px 11px;border-radius:999px;background:#fff;border:1px solid var(--line-2,#d9dde2);color:var(--text-1,#050608);cursor:pointer;white-space:nowrap;"><i class="ph ph-play-fill" style="font-size:11px;color:var(--mint-500,#00d88e)"></i>Preview</button>
+      <div style="display:inline-flex;align-items:center;gap:8px;">
+        ${sampleBtn}
+        ${chooseBtn}
+      </div>
     </div>`;
   }).join('');
   // Update save button state
@@ -51917,16 +52275,32 @@ const VP_PREVIEW_TEXT = {
   ms:   'Helo, ini ialah contoh suara saya dalam bahasa Melayu.',
 };
 
-let _vpCurrentAudio = null; // track active preview so we can stop it
+let _vpCurrentAudio = null;     // active <Audio> for the sample preview
+let _vpPlayingVoiceId = null;   // which voice is currently being sampled (for UI)
+
+function vpStopPreview(){
+  if(_vpCurrentAudio){
+    try { _vpCurrentAudio.pause(); _vpCurrentAudio.src = ''; } catch(e){}
+  }
+  _vpCurrentAudio   = null;
+  _vpPlayingVoiceId = null;
+  if(typeof renderVoiceCards === 'function') renderVoiceCards();
+}
 
 function vpPreview(voiceId){
-  // Stop any currently playing voice preview
-  if(_vpCurrentAudio){ _vpCurrentAudio.pause(); _vpCurrentAudio.src = ''; _vpCurrentAudio = null; }
+  // Stop any currently playing voice preview before starting a new one.
+  vpStopPreview();
 
   const key = getElKey();
   if(!key){ toast('Add your ElevenLabs key in Settings to preview voices','#ca8a04',4000); return; }
   const lang = (st.tgt || (st.tgts && st.tgts[0]) || 'es').toLowerCase().replace(/-.*$/,'');
   const text = VP_PREVIEW_TEXT[lang] || 'Hello, this is a voice preview.';
+
+  // Optimistically mark this voice as "playing" so the UI reflects the
+  // pending request — the EQ-bars / "Now sampling" pill appears immediately.
+  _vpPlayingVoiceId = voiceId;
+  renderVoiceCards();
+
   fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
     method:'POST', headers:{'xi-api-key':key,'Content-Type':'application/json'},
     body: JSON.stringify({text, model_id:'eleven_multilingual_v2', voice_settings:{stability:0.5,similarity_boost:0.8}}),
@@ -51934,10 +52308,24 @@ function vpPreview(voiceId){
     .then(b=>{
       const a = new Audio(URL.createObjectURL(b));
       _vpCurrentAudio = a;
-      a.addEventListener('ended', ()=>{ if(_vpCurrentAudio===a) _vpCurrentAudio=null; });
-      a.play().catch(()=>toast('Click the page first to allow audio playback','#ca8a04',3000));
+      a.addEventListener('ended', () => {
+        if(_vpCurrentAudio === a){
+          _vpCurrentAudio = null;
+          _vpPlayingVoiceId = null;
+          renderVoiceCards();
+        }
+      });
+      a.play().catch(()=>{
+        toast('Click the page first to allow audio playback','#ca8a04',3000);
+        _vpPlayingVoiceId = null;
+        renderVoiceCards();
+      });
     })
-    .catch(e=>toast('Preview failed: '+e.message,'#e53e3e',4000));
+    .catch(e=>{
+      toast('Preview failed: '+e.message,'#e53e3e',4000);
+      _vpPlayingVoiceId = null;
+      renderVoiceCards();
+    });
 }
 
 function initVoEngineScreen(){
@@ -51946,6 +52334,11 @@ function initVoEngineScreen(){
   $('vo-state-received').style.display = 'none';
   $('sv-to-render').disabled = true;
   if($('sv-export')) $('sv-export').disabled = true;
+  // Hide the dock back button on the voice picker entry — it leads users
+  // to expect a step backwards that doesn't fit the current flow. The button
+  // is re-enabled selectively elsewhere if a back path is meaningful.
+  const svBack = $('sv-back');
+  if(svBack) svBack.style.display = 'none';
 
   const LN={en:'English',es:'Spanish',fr:'French',de:'German',pt:'Portuguese',it:'Italian',
     ja:'Japanese',zh:'Chinese',ar:'Arabic',ko:'Korean',ptbr:'Pt (BR)',nl:'Dutch',
