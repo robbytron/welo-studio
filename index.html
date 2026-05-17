@@ -42304,6 +42304,18 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
       </div>
 
+      <!-- All-done CTA — gives clients a clear way back to their projects
+           after they've downloaded everything, instead of leaving them
+           stranded on the delivery screen. -->
+      <div style="margin-top:28px;padding-top:24px;border-top:1px solid var(--line-1,#f0f1f3);display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+        <div style="font-family:var(--font-sans);font-size:13px;color:var(--text-3,#7e848d);line-height:1.5;">
+          <strong style="color:var(--text-1,#050608);font-weight:700;">All done?</strong> You can come back to this project any time from your projects dashboard.
+        </div>
+        <button onclick="openDashboard()" style="padding:11px 22px;background:var(--mint-500,#00d88e);color:var(--ink,#050608);border:none;border-radius:10px;font-family:var(--font-sans);font-size:13px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:8px;letter-spacing:-0.01em;">
+          <i class="ph ph-check" style="font-size:14px"></i> Finish &amp; back to projects
+        </button>
+      </div>
+
       <!-- sv-to-render: accessible to JS, hidden visually (used by smart flow render path) -->
       <button id="sv-to-render" style="display:none;" disabled></button>
 
@@ -45648,14 +45660,16 @@ function enterTranslationReview(){
 
   show('translation-review-screen');
   // Show role-appropriate footer button.
-  //   - MM Producer (or client/no-role): "Send to Linguist"
+  //   - MM Producer (agency side only): "Send to Linguist"
   //   - Linguist: "Send back to Producer"
-  //   - QA / others: neither (just Approve & Continue)
+  //   - Client flow / QA / no-role: neither (just Approve & Continue) —
+  //     "Send to Linguist" must not appear on the client side because the
+  //     client has no linguist queue to route to.
   const role     = (typeof bkState !== 'undefined' && bkState && bkState.role) || null;
   const toLing   = $('trv-send-linguist-btn');
   const toProd   = $('trv-send-producer-btn');
-  if(toLing) toLing.style.display = (role === 'linguist') ? 'none' : 'inline-flex';
-  if(toProd) toProd.style.display = (role === 'linguist') ? 'inline-flex' : 'none';
+  if(toLing) toLing.style.display = (role === 'mm')        ? 'inline-flex' : 'none';
+  if(toProd) toProd.style.display = (role === 'linguist')  ? 'inline-flex' : 'none';
   if(typeof lucide !== 'undefined') lucide.createIcons();
 }
 
