@@ -39728,12 +39728,33 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         <span class="az-status" id="el-status" style="display:none"></span>
       </div>
 
+      <!-- Anthropic -->
+      <div class="az-divider" style="margin-top:18px">Anthropic <span style="font-size:10px;font-weight:400;color:#888">(Length-aware translation for VO)</span></div>
+      <div class="az-cfg-field">
+        <label>API Key</label>
+        <input type="password" id="anthropic-key-inp" placeholder="Paste your Anthropic API key (sk-ant-…)" autocomplete="off">
+      </div>
+      <div class="az-test-row">
+        <button class="az-test-btn" id="anthropic-test-btn" onclick="testAnthropicKey()">Test Key</button>
+        <span class="az-status" id="anthropic-status" style="display:none"></span>
+      </div>
+      <p style="font-size:11px;color:#aaa;margin-top:4px;line-height:1.5">Optional — when set, voice-over translations are length-budgeted so they fit each video segment, eliminating overrun and audio overlap. Falls back to Azure Translator if unset.</p>
+
       <!-- Save all -->
       <div style="margin-top:20px;display:flex;gap:8px;">
         <button onclick="saveAllCredentials()" style="flex:1;padding:11px 0;background:var(--wl-blue-700);color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font-sans);">Save All Credentials</button>
         <button onclick="resetAzCredentials()" style="padding:11px 16px;background:transparent;border:1px solid #ddd;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font-sans);color:#888;">Reset</button>
       </div>
       <p style="font-size:11px;color:#aaa;margin-top:10px;line-height:1.6;text-align:center;">Keys are stored in this browser only — never sent to any server.</p>
+
+      <!-- Pre-flight: test that every supported target language actually translates -->
+      <div class="az-divider" style="margin-top:20px">Pre-flight check</div>
+      <p style="font-size:12px;color:#777;margin:2px 0 10px;line-height:1.5">Translate a sample sentence into every supported target language via both Opal C and Opal A. Use this before a demo to catch any language that's silently failing.</p>
+      <div class="az-test-row" style="gap:10px;">
+        <button class="az-test-btn" id="lang-diag-btn" onclick="runTranslationDiagnostic()">Test all languages</button>
+        <span class="az-status" id="lang-diag-status" style="display:none"></span>
+      </div>
+      <div id="lang-diag-results" style="display:none;margin-top:10px;max-height:320px;overflow:auto;border:1px solid #e3e6e9;border-radius:9px;font-size:11px;font-family:var(--font-mono);"></div>
     </div>
   </div>
 </div>
@@ -39941,6 +39962,104 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 .succ-dl-btn { background:#00d88e; border:none; border-radius:8px; padding:7px 14px; font-size:11px; font-weight:700; color:#050608; cursor:pointer; letter-spacing:-0.01em; transition:background 160ms; white-space:nowrap; }
 .succ-dl-btn:hover { background:#2cebab; }
 </style>
+<!-- ═══ VO TIMELINE EDITOR SCREEN ═══ -->
+<div id="vo-timeline-screen" class="screen" style="background:#0a0e17;min-height:100vh;color:#fff;flex-direction:column;">
+  <!-- Header -->
+  <div style="padding:14px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.08);background:#0a0e17;">
+    <div style="display:flex;align-items:center;gap:18px;min-width:0;">
+      <button id="vot-close-btn" style="padding:7px 14px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.8);border:1px solid rgba(255,255,255,0.12);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font-sans);">← Back to preview</button>
+      <div style="min-width:0;">
+        <div style="font-size:11px;color:rgba(255,255,255,0.5);letter-spacing:0.12em;text-transform:uppercase;font-family:var(--font-mono);">Voice-Over Timeline</div>
+        <div id="vot-heading" style="font-size:16px;font-weight:700;letter-spacing:-0.01em;margin-top:2px;">Edit clip timing &amp; pace</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <div id="vot-lang-tabs" style="display:none;gap:6px;"></div>
+      <div style="width:1px;height:22px;background:rgba(255,255,255,0.12);display:none" id="vot-lang-divider"></div>
+      <button id="vot-zoom-out" title="Zoom out" style="width:30px;height:30px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.7);border:1px solid rgba(255,255,255,0.12);border-radius:6px;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;">−</button>
+      <span id="vot-zoom-label" style="font-size:11px;color:rgba(255,255,255,0.55);font-family:var(--font-mono);min-width:48px;text-align:center;">50 px/s</span>
+      <button id="vot-zoom-in" title="Zoom in" style="width:30px;height:30px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.7);border:1px solid rgba(255,255,255,0.12);border-radius:6px;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;">+</button>
+      <button id="vot-reset-btn" style="padding:7px 14px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.7);border:1px solid rgba(255,255,255,0.12);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font-sans);">Reset edits</button>
+      <button id="vot-apply-btn" style="padding:8px 16px;background:var(--mint-500,#00d88e);color:#050608;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font-sans);">Apply &amp; Return →</button>
+    </div>
+  </div>
+
+  <!-- Video preview -->
+  <div style="padding:14px 24px;background:#000;border-bottom:1px solid rgba(255,255,255,0.08);">
+    <div style="max-width:560px;margin:0 auto;background:#000;border-radius:10px;overflow:hidden;aspect-ratio:16/9;position:relative;">
+      <video id="vot-video" style="width:100%;height:100%;object-fit:contain;background:#000;display:block;" preload="metadata" muted playsinline></video>
+      <div id="vot-playhead-label" style="position:absolute;left:10px;bottom:10px;background:rgba(0,0,0,0.65);color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:5px;font-family:var(--font-mono);letter-spacing:0.06em;">0:00.0</div>
+    </div>
+  </div>
+
+  <!-- Playback controls -->
+  <div style="padding:10px 24px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;gap:14px;">
+    <button id="vot-play-btn" style="width:36px;height:36px;background:var(--mint-500,#00d88e);color:#050608;border:none;border-radius:50%;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;"><i class="ph-fill ph-play"></i></button>
+    <div id="vot-time-display" style="font-size:13px;color:rgba(255,255,255,0.75);font-family:var(--font-mono);letter-spacing:0.04em;">0:00.0 / 0:00.0</div>
+    <div style="flex:1;min-width:80px;"></div>
+    <div id="vot-selection-info" style="font-size:12px;color:rgba(255,255,255,0.55);font-family:var(--font-mono);letter-spacing:0.04em;"></div>
+  </div>
+
+  <!-- Timeline area — sized to fit its content rather than the whole
+       remaining viewport, so there's no big empty gap below the clips. -->
+  <div style="overflow:auto;background:#0a0e17;position:relative;flex:0 0 auto;padding:0 24px 18px;" id="vot-scroll">
+    <div id="vot-canvas" style="position:relative;">
+      <div id="vot-ruler" style="position:relative;height:24px;border-bottom:1px solid rgba(255,255,255,0.08);background:#0a0e17;font-family:var(--font-mono);font-size:10px;color:rgba(255,255,255,0.45);"></div>
+      <div id="vot-track" style="position:relative;height:88px;margin:18px 0 8px;"></div>
+      <div id="vot-playhead" style="position:absolute;top:0;bottom:0;width:2px;background:var(--mint-500,#00d88e);box-shadow:0 0 6px rgba(0,216,142,0.6);left:0;z-index:30;cursor:ew-resize;transform:translateX(0);will-change:transform;">
+        <div id="vot-playhead-knob" style="position:absolute;top:-4px;left:-7px;width:16px;height:16px;background:var(--mint-500,#00d88e);border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.4),inset 0 -2px 4px rgba(0,0,0,0.15);cursor:grab;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Spacer that fills any remaining viewport space below the timeline with
+       the same dark bg as the rest of the editor, so the page never reveals
+       the light body background through here. -->
+  <div style="flex:1 1 auto;background:#0a0e17;min-height:0;"></div>
+
+  <!-- Right-click menu -->
+  <div id="vot-ctx-menu" style="display:none;position:fixed;background:#1a1f2e;border:1px solid rgba(255,255,255,0.12);border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,0.4);min-width:220px;z-index:9999;padding:6px 0;font-family:var(--font-sans);">
+    <button data-vot-action="reset-clip" style="display:block;width:100%;padding:8px 14px;background:none;border:none;color:#fff;text-align:left;font-size:13px;cursor:pointer;font-family:inherit;"><i class="ph ph-arrow-counter-clockwise" style="margin-right:8px;color:rgba(255,255,255,0.55);"></i>Reset to original timing</button>
+    <div style="height:1px;background:rgba(255,255,255,0.08);margin:4px 0;"></div>
+    <div id="vot-ctx-info" style="padding:6px 14px;font-size:11px;color:rgba(255,255,255,0.45);font-family:var(--font-mono);"></div>
+  </div>
+</div>
+
+<!-- ═══ CAPTION PREVIEW SCREEN ═══ -->
+<div id="caption-preview-screen" class="screen" style="background:#0a0e17;min-height:100vh;color:#fff;">
+  <div style="padding:24px 32px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.08);">
+    <div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.5);letter-spacing:0.12em;text-transform:uppercase;font-family:var(--font-mono);">Caption Preview & Download</div>
+      <div id="cp-heading" style="font-size:22px;font-weight:700;letter-spacing:-0.01em;margin-top:4px;">Preview your <span style="color:var(--wl-mint-500,#00d88e);">captions.</span></div>
+    </div>
+    <button id="cp-back-btn" style="padding:9px 18px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.75);border:1px solid rgba(255,255,255,0.12);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font-sans);">← Back to review</button>
+  </div>
+
+  <div style="display:grid;grid-template-columns:minmax(0,1.4fr) minmax(280px,1fr);gap:24px;padding:24px 32px;max-width:1400px;margin:0 auto;">
+    <!-- Video preview with subtitle overlay -->
+    <div>
+      <div id="cp-lang-tabs" style="display:none;gap:6px;flex-wrap:wrap;margin-bottom:12px;"></div>
+      <div style="position:relative;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:16/9;">
+        <video id="cp-video" style="width:100%;height:100%;object-fit:contain;display:block;background:#000;" preload="metadata" controls></video>
+        <div id="cp-sub-overlay" style="position:absolute;left:0;right:0;bottom:8%;display:flex;justify-content:center;pointer-events:none;padding:0 24px;">
+          <span id="cp-sub-text" style="background:rgba(0,0,0,0.72);color:#fff;font-size:17px;font-weight:600;line-height:1.35;padding:6px 14px;border-radius:6px;font-family:var(--font-sans);text-align:center;max-width:90%;white-space:pre-line;display:none;"></span>
+        </div>
+        <div id="cp-lang-badge" style="position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.55);color:rgba(255,255,255,0.85);font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;letter-spacing:0.12em;font-family:var(--font-mono);"></div>
+      </div>
+      <div id="cp-meta" style="margin-top:10px;font-size:12px;color:rgba(255,255,255,0.55);font-family:var(--font-mono);letter-spacing:0.05em;"></div>
+    </div>
+
+    <!-- Download cards + summary -->
+    <div>
+      <div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.85);margin-bottom:10px;letter-spacing:0.02em;">Download</div>
+      <div id="cp-dl-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.08);">
+        <button id="cp-finish-btn" style="width:100%;padding:11px 18px;background:var(--wl-mint-500,#00d88e);color:#050608;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font-sans);display:flex;align-items:center;justify-content:center;gap:8px;">Finish project <i class="ph ph-check"></i></button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="success-screen" class="screen">
   <div class="succ-bg">
     <video autoplay muted loop playsinline onerror="this.style.opacity='0'" oncanplay="this.style.opacity='1'" style="opacity:0;transition:opacity 1s;">
@@ -40598,6 +40717,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       <button id="tr-az-translate" style="display:none"></button>
     </div>
   </div>
+  <!-- Per-language tabs (visible only on translated review of guided multi-lang captions) -->
+  <div id="tr-lang-tabs" style="display:none;padding:8px 16px;gap:6px;background:#1e2130;border-bottom:1px solid rgba(255,255,255,0.08);"></div>
   <!-- Spec QA summary bar -->
   <div class="specs-bar" id="specs-bar">
     <span class="ico-sm"><i data-lucide="sliders-horizontal"></i></span>
@@ -42001,6 +42122,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         </div>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
           <div style="flex:1;min-width:120px;font-size:12px;color:var(--text-3,#7e848d);" id="vo-preview-info">Voice-over ready</div>
+          <button id="vo-edit-translations-btn" onclick="enterCaptionsReEdit()" style="display:none;padding:9px 16px;background:rgba(0,216,142,0.08);color:var(--mint-500,#00d88e);border:1px solid rgba(0,216,142,0.28);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font-sans);align-items:center;gap:6px;" title="Edit translations / transcript flow"><i class="ph ph-text-aa"></i> Re-edit translations</button>
+          <button id="vo-edit-timeline-btn" onclick="enterVoTimeline()" style="padding:9px 16px;background:rgba(0,216,142,0.08);color:var(--mint-500,#00d88e);border:1px solid rgba(0,216,142,0.28);border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font-sans);display:inline-flex;align-items:center;gap:6px;" title="Make further timing edits"><i class="ph ph-sliders-horizontal"></i> Re-edit timeline</button>
           <span id="vo-dl-label" style="display:none"></span>
           <span id="vo-dl-all-label" style="display:none"></span>
           <button id="vo-dl-video-btn" style="display:none"></button>
@@ -42625,7 +42748,21 @@ function toast(msg, colorOrType, dur){
 }
 function fmtDate(iso){ try{ return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }catch(e){return iso||'—';} }
 function fmtMoney(n){ return n==null?'Quoted offline':'$'+n.toFixed(2); }
-function fmtMins(m){ if(!m||m<=0) return '—'; const h=Math.floor(m/60), mins=Math.round(m%60); return h>0?`${h}h ${mins}m`:`${m.toFixed(1)} min`; }
+// Human-readable duration. Input is total minutes (can be fractional).
+//   42s     →  "42s"
+//   1m 30s  →  "1m 30s"
+//   5m      →  "5m"
+//   1h 23m  →  "1h 23m"
+function fmtMins(m){
+  if(!m || m <= 0) return '—';
+  const totalSec = Math.round(m * 60);
+  const h    = Math.floor(totalSec / 3600);
+  const mins = Math.floor((totalSec % 3600) / 60);
+  const secs = totalSec % 60;
+  if(h > 0)    return mins > 0 ? `${h}h ${mins}m` : `${h}h`;
+  if(mins > 0) return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+  return `${secs}s`;
+}
 // $ helper used by studio
 const $=id=>document.getElementById(id);
 
@@ -42833,7 +42970,7 @@ const ELEARN_SCOPES = [
 
 // ── App state ─────────────────────────────────────────────────────────────────
 const cp = { user:null, step:1, draft:{}, currentJobId:null };
-const STATUS_LABELS = {submitted:'Submitted',in_review:'In Review',in_progress:'In Progress',qa:'QA',ready_for_review:'Ready for Review',delivered:'Delivered'};
+const STATUS_LABELS = {submitted:'Submitted',in_review:'In Review',in_progress:'In Progress',qa:'QA',ready_for_review:'Ready for Review',delivered:'Completed'};
 const STATUS_STEPS  = ['submitted','in_review','in_progress','qa','ready_for_review','delivered'];
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -42954,10 +43091,18 @@ function renderDetail(){
     <div class="deliverable-info"><div class="deliverable-name">${esc(d.name)}</div><div class="deliverable-meta">${d.lang.toUpperCase()} · ${d.type}</div></div>
     <button class="btn-download" onclick="cpDownload('${j.id}',${idx})"><i class="ph ph-download-simple" style="font-size:14px;"></i> Download</button></div>`).join('')
     :'<div style="font-size:13px;color:var(--wl-mute);text-align:center;padding:18px;font-family:var(--font-sans);">Deliverables will appear here once complete.</div>';
-  const approveHtml=(j.status==='ready_for_review'||j.status==='delivered')
-    ?(j.clientApproved?'<div class="approved-badge"><i class="ph ph-check-circle" style="font-size:15px;"></i> You\'ve approved this delivery — thank you!</div>'
-    :`<p style="font-size:13px;color:var(--sub);line-height:1.5;margin-top:12px">Please review the delivered files. When satisfied, click Approve to confirm.</p>
-      <button class="btn-approve" onclick="approveJob('${j.id}')"><i class="ph ph-check" style="font-size:14px;"></i> Approve Delivery</button>`):'';
+  // "Approve Delivery" only makes sense for agency-managed (non-self-serve)
+  // tiers where the client is reviewing the agency's output. For Smart
+  // self-serve projects the user IS the client AND the agency, so the
+  // explicit approval step is redundant — hide it. The hero re-open banner
+  // at the top of the page is the only CTA needed.
+  const isSelfServe = j.selfService === true || j.tier === 'smart';
+  const approveHtml = (!isSelfServe && (j.status==='ready_for_review' || j.status==='delivered'))
+    ? (j.clientApproved
+        ? `<div class="approved-badge"><i class="ph ph-check-circle" style="font-size:15px;"></i> You've approved this delivery — thank you!</div>`
+        : `<p style="font-size:13px;color:var(--sub);line-height:1.5;margin-top:12px">Please review the delivered files. When satisfied, click Approve to confirm.</p>
+      <button class="btn-approve" onclick="approveJob('${j.id}')"><i class="ph ph-check" style="font-size:14px;"></i> Approve Delivery</button>`)
+    : '';
   // Build the quote/cost card
   const quoteCard = j.estCost!=null ? `
     <div class="detail-card" style="background:var(--wl-ink);border-color:var(--wl-ink);">
@@ -42982,7 +43127,22 @@ function renderDetail(){
       <div style="font-size:13px;color:var(--wl-mute);line-height:1.6;font-family:var(--font-sans);">A Welocalize specialist will send you a tailored quote within <strong>1 business day</strong> after reviewing your Premium scope request.</div>
     </div>`;
 
+  // Hero "Project complete" banner — single, clear CTA at the top of the
+  // detail page. Re-opening the job in the editor lets the user download
+  // deliverables, re-edit translations, and adjust the VO timeline.
+  const reopenHero = (j.status === 'delivered')
+    ? `<div style="margin-bottom:20px;padding:18px 22px;background:linear-gradient(135deg,#dcfce7,#bbf7d0);border:1px solid #86efac;border-radius:14px;display:flex;align-items:center;gap:16px;">
+        <div style="width:46px;height:46px;border-radius:12px;background:var(--wl-mint-500,#00d88e);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="ph ph-check-circle" style="font-size:26px;color:#050608;line-height:1"></i></div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-family:var(--font-sans);font-size:15px;font-weight:700;color:#065f46;letter-spacing:-0.01em;">Project complete — your deliverables are ready</div>
+          <div style="font-family:var(--font-sans);font-size:12.5px;color:#0f766e;margin-top:3px;line-height:1.45;">Open the editor to download your files, re-edit translations, or fine-tune the voice-over.</div>
+        </div>
+        <button onclick="openJobFromQueue('${j.id}')" style="padding:12px 22px;background:var(--wl-mint-500,#00d88e);color:#050608;border:none;border-radius:10px;font-family:var(--font-sans);font-size:13.5px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:8px;flex-shrink:0;letter-spacing:-0.01em;"><i class="ph ph-download-simple" style="font-size:15px"></i> Get files &amp; edit</button>
+      </div>`
+    : '';
+
   document.getElementById('detail-content').innerHTML=`
+    ${reopenHero}
     <div class="detail-header"><div><div class="detail-title">${esc(j.projectName)}</div><div class="detail-id">${j.id} · ${getTierLabel(j.tier)} · Submitted ${fmtDate(j.submittedAt)}</div></div>${statusBadge(j.status)}</div>
     <div style="display:flex;align-items:center;gap:14px;padding:14px 18px;background:var(--wl-bg);border:1px solid var(--wl-line);border-radius:14px;margin-bottom:20px;">
       <div style="width:44px;height:44px;border-radius:12px;background:var(--wl-blue-700);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="ph ${j.mediaType==='audio'?'ph-music-note':'ph-film-slate'}" style="font-size:22px;color:#fff;line-height:1;"></i></div>
@@ -43127,11 +43287,11 @@ async function startSmartProcess(){
 
   // Credentials check
   if(!getAzSpeechKey()){
-    toast('No Azure Speech key — open Settings and save your credentials first','error',5000);
+    toast('No Opal A key — open Settings and save your credentials first','error',5000);
     return;
   }
   if(!getAzTransKey()){
-    toast('No Azure Translator key — open Settings and save your credentials first','error',5000);
+    toast('No Opal A key — open Settings and save your credentials first','error',5000);
     return;
   }
 
@@ -44556,6 +44716,163 @@ const NO_STEP_SCREENS=new Set(['backend-login-screen','job-queue-screen','studio
 // show() — studio screen switcher (defined in shared view-switching section above, handles body.studio-mode)
 // This section extends the stepper logic via the shared show() which already uses SCREENS/NO_STEP_SCREENS
 
+// ─── CAPTION PREVIEW SCREEN ──────────────────────────────────────────────────
+// Lives at the end of the guided captions flow: video plays with translated
+// subtitles overlaid, per-language tabs let the user switch which language
+// they're previewing, and each language gets a download card.
+let _cpActiveLang = null;
+let _cpListenerAttached = false;
+
+function enterCaptionPreview(){
+  const tgts = (st.tgts && st.tgts.length) ? st.tgts.slice() : [st.tgt || 'es'];
+  _cpActiveLang = (st.tgt && tgts.includes(st.tgt)) ? st.tgt : tgts[0];
+
+  // Resolve a video source — uploaded file > existing transcript video > demo.
+  const vid = $('cp-video');
+  if(vid){
+    const trVidSrc = $('video-el') && $('video-el').getAttribute('src');
+    const vidSrc = (st.file && st.isVideo) ? URL.createObjectURL(st.file)
+                  : (trVidSrc || st.demoVideoUrl || DEMO_VIDEO_URL);
+    if(vidSrc && vid.getAttribute('src') !== vidSrc){
+      vid.src = vidSrc;
+      vid.load();
+    }
+    vid.muted = false;
+    vid.controls = true;
+  }
+
+  _cpRenderLangTabs(tgts);
+  _cpRenderDownloadList(tgts);
+  _cpSwitchLang(_cpActiveLang);
+
+  // Attach the timeupdate listener once — drives the subtitle overlay.
+  if(!_cpListenerAttached && vid){
+    vid.addEventListener('timeupdate', _cpUpdateSubOverlay);
+    _cpListenerAttached = true;
+  }
+
+  // Wire back + finish buttons (idempotent).
+  const backBtn = $('cp-back-btn');
+  if(backBtn){
+    const f = backBtn.cloneNode(true); backBtn.parentNode.replaceChild(f, backBtn);
+    $('cp-back-btn').addEventListener('click', () => {
+      st.wfStep = 3;
+      enterTranscript();
+    });
+  }
+  // For mode='both' (captions + VO), the caption pipeline is the first half
+  // of the project — the finish button continues into VO setup instead of
+  // closing out the project. For captions-only, it finalises and returns
+  // the user to the dashboard.
+  const mode = st.smartMode || 'captions';
+  const continuesToVO = (mode === 'both');
+  const finBtn = $('cp-finish-btn');
+  if(finBtn){
+    finBtn.innerHTML = continuesToVO
+      ? 'Continue to Voice-Over <i class="ph ph-arrow-right"></i>'
+      : 'Finish project <i class="ph ph-check"></i>';
+    const f = finBtn.cloneNode(true); finBtn.parentNode.replaceChild(f, finBtn);
+    $('cp-finish-btn').addEventListener('click', () => {
+      if(continuesToVO){
+        toast('Captions approved — setting up voice-over', 'success', 2500);
+        enterSV();
+      } else {
+        toast('Captions finalised — project complete ✓', 'success', 3500);
+        openDashboard();
+      }
+    });
+  }
+  // Update the heading copy so users see the right framing for captions+VO.
+  const heading = $('cp-heading');
+  if(heading){
+    heading.innerHTML = continuesToVO
+      ? 'Review your <span style="color:var(--wl-mint-500,#00d88e);">captions</span>, then continue to voice-over.'
+      : 'Preview your <span style="color:var(--wl-mint-500,#00d88e);">captions.</span>';
+  }
+
+  show('caption-preview-screen');
+  if(typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function _cpRenderLangTabs(tgts){
+  const el = $('cp-lang-tabs');
+  if(!el) return;
+  if(!tgts || tgts.length < 2){ el.style.display = 'none'; return; }
+  const LN={en:'English',es:'Spanish',fr:'French',de:'German',pt:'Portuguese',it:'Italian',
+    ja:'Japanese',zh:'Chinese',ar:'Arabic',ko:'Korean',ptbr:'Pt (BR)',nl:'Dutch',
+    ru:'Russian',tr:'Turkish',vi:'Vietnamese',pl:'Polish',sv:'Swedish',he:'Hebrew',
+    id:'Indonesian',ms:'Malay'};
+  el.style.display = 'flex';
+  el.innerHTML = tgts.map(lang => {
+    const isActive = lang === _cpActiveLang;
+    return `<button data-cp-lang="${lang}" style="
+      padding:7px 16px;border-radius:999px;font-size:13px;font-weight:600;cursor:pointer;
+      font-family:var(--font-sans);border:1px solid ${isActive?'var(--wl-mint-500,#00d88e)':'rgba(255,255,255,0.14)'};
+      background:${isActive?'var(--wl-mint-500,#00d88e)':'rgba(255,255,255,0.04)'};
+      color:${isActive?'#050608':'rgba(255,255,255,0.7)'};display:flex;align-items:center;gap:6px;">
+      ${LN[lang]||lang.toUpperCase()}
+      <span style="font-family:var(--font-mono);font-size:10px;font-weight:700;opacity:0.7">${lang.toUpperCase()}</span>
+    </button>`;
+  }).join('');
+  el.querySelectorAll('button[data-cp-lang]').forEach(btn => {
+    btn.addEventListener('click', () => _cpSwitchLang(btn.dataset.cpLang));
+  });
+}
+
+function _cpRenderDownloadList(tgts){
+  const el = $('cp-dl-list');
+  if(!el) return;
+  const LN={en:'English',es:'Spanish',fr:'French',de:'German',pt:'Portuguese',it:'Italian',
+    ja:'Japanese',zh:'Chinese',ar:'Arabic',ko:'Korean',ptbr:'Pt (BR)',nl:'Dutch',
+    ru:'Russian',tr:'Turkish',vi:'Vietnamese',pl:'Polish',sv:'Swedish',he:'Hebrew',
+    id:'Indonesian',ms:'Malay'};
+  const segCount = (st.segs || []).length;
+  el.innerHTML = tgts.map(lang => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:9px;">
+      <i class="ph ph-subtitles" style="font-size:20px;color:var(--wl-mint-500,#00d88e);flex-shrink:0;"></i>
+      <div style="min-width:0;flex:1;">
+        <div style="font-size:13px;font-weight:600;color:#fff;letter-spacing:-0.01em;">${LN[lang]||lang.toUpperCase()}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.5);font-family:var(--font-mono);margin-top:2px;">SRT · ${segCount} segments</div>
+      </div>
+      <button onclick="downloadSRT('${lang}')" style="padding:7px 14px;background:rgba(0,216,142,0.14);color:var(--wl-mint-500,#00d88e);border:1px solid rgba(0,216,142,0.3);border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font-sans);white-space:nowrap;">↓ SRT</button>
+    </div>
+  `).join('');
+}
+
+function _cpSwitchLang(lang){
+  _cpActiveLang = lang;
+  // Update badge + meta line
+  const LN={en:'English',es:'Spanish',fr:'French',de:'German',pt:'Portuguese',it:'Italian',
+    ja:'Japanese',zh:'Chinese',ar:'Arabic',ko:'Korean',ptbr:'Pt (BR)',nl:'Dutch',
+    ru:'Russian',tr:'Turkish',vi:'Vietnamese',pl:'Polish',sv:'Swedish',he:'Hebrew',
+    id:'Indonesian',ms:'Malay'};
+  const badge = $('cp-lang-badge'); if(badge) badge.textContent = (lang||'').toUpperCase();
+  const meta  = $('cp-meta');
+  const n = (st.segs || []).length;
+  if(meta) meta.textContent = `${LN[lang]||lang.toUpperCase()} · ${n} caption segments`;
+  // Re-render tabs to update active state
+  const tgts = (st.tgts && st.tgts.length) ? st.tgts.slice() : [lang];
+  _cpRenderLangTabs(tgts);
+  _cpUpdateSubOverlay();
+}
+
+function _cpUpdateSubOverlay(){
+  const vid = $('cp-video'); const sub = $('cp-sub-text');
+  if(!vid || !sub) return;
+  const t = vid.currentTime;
+  const trans = (st.transPerLang && st.transPerLang[_cpActiveLang]) || [];
+  const seg = (st.segs || []).find(s => t >= (s.start||0) && t < (s.end||0));
+  if(!seg){ sub.style.display = 'none'; sub.textContent = ''; return; }
+  const i = st.segs.indexOf(seg);
+  const text = trans[i] || seg.trans || seg.tgt || seg.orig || '';
+  if(text){
+    sub.textContent = text;
+    sub.style.display = '';
+  } else {
+    sub.style.display = 'none';
+  }
+}
+
 function downloadSRT(lang){
   const segs = st.segs || [];
   const trans = (st.transPerLang && st.transPerLang[lang]) || [];
@@ -44876,7 +45193,7 @@ async function routingAzureTranslate(){
         ? `Translating → ${lang.toUpperCase()} (${i+1}/${allLangs.length})…`
         : 'Translating…';
       if(icon) icon.textContent = '⏳';
-      await translateSegmentsWithAzure(lang);
+      await translateSegmentsForVO(lang);
       st.transPerLang[lang] = st.segs.map(s=>s.trans||s.orig);
     }
     // Keep st.tgt pointing at first lang for single-lang compat
@@ -44907,6 +45224,11 @@ function doRouteHuman(){ enterOpal(); }
 
 // ─── SMART auto-translate (bypasses routing choice screen) ────────────────────
 async function enterSmartAutoTranslate(){
+  // Clear any active cp-screens (intake, etc.) so they don't render behind
+  // the studio screens — show() deliberately leaves cp-screens alone, but
+  // the auto-mode transition from intake → opal needs them gone.
+  document.querySelectorAll('#cp-screens .screen').forEach(s => s.classList.remove('active'));
+
   const allLangs = (st.tgts && st.tgts.length) ? st.tgts.slice(0,5) : [st.tgt||'es'];
   const LNAMES2={en:'English',es:'Spanish',fr:'French',de:'German',pt:'Portuguese',it:'Italian',ja:'Japanese',zh:'Chinese',ar:'Arabic',ko:'Korean',ptbr:'Pt BR',nl:'Dutch',ru:'Russian',tr:'Turkish',vi:'Vietnamese',pl:'Polish',sv:'Swedish',he:'Hebrew',id:'Indonesian',ms:'Malay'};
   const tgtsStr = allLangs.map(l=>LNAMES2[l]||l.toUpperCase()).join(', ');
@@ -44948,7 +45270,7 @@ async function enterSmartAutoTranslate(){
         ? `Translating into ${LNAMES2[lang]||lang.toUpperCase()} (${i+1} of ${allLangs.length})…`
         : `Translating into ${LNAMES2[lang]||lang.toUpperCase()}…`;
       const langStart = Date.now();
-      await translateSegmentsWithAzure(lang);
+      await translateSegmentsForVO(lang);
       st.transPerLang[lang] = st.segs.map(s=>s.trans||s.orig);
       const langElapsed = Date.now() - langStart;
       if(langElapsed < minPerLang) await new Promise(r=>setTimeout(r, minPerLang - langElapsed));
@@ -44963,13 +45285,21 @@ async function enterSmartAutoTranslate(){
     // Auto-navigate based on smartMode and workMode
     const mode     = st.smartMode     || 'captions';
     const workMode = st.smartWorkMode || 'guided';
-    if(mode === 'synth-vo' || (mode === 'both' && workMode === 'auto')){
-      enterSV(); // automated: skip transcript review, go straight to VO
-    } else if(mode === 'captions' && workMode === 'auto'){
-      // Automated captions — show delivery screen with live caption preview
-      enterDelivery();
+    if(workMode === 'auto'){
+      // Auto mode: skip the source transcript review AND the side-by-side
+      // translation review. Land directly on the same FINAL review screens
+      // the guided flow uses, so the end state is identical regardless of
+      // workMode.
+      //   - captions      → translated transcript editor (per-lang approve & SRT download)
+      //   - captions+VO   → translated transcript editor → (then VO editor on completion)
+      //   - VO only       → VO setup (voice picker) → VO editor
+      if(mode === 'synth-vo'){
+        enterSV();
+      } else {
+        _enterTranslatedTranscriptReview();
+      }
     } else {
-      // guided — translation review screen
+      // Guided — side-by-side translation review (then guided flow continues).
       enterTranslationReview();
     }
   } catch(e){
@@ -45433,19 +45763,17 @@ function _trvSetShare(sent){
       if(allDone){
         // All languages done — proceed
         const mode = st.smartMode || 'captions';
-        if(mode === 'synth-vo' || mode === 'both'){
+        if(mode === 'synth-vo'){
+          // VO-only flow goes straight to voice-over setup.
           enterSV();
         } else {
-          // Guided captions — show SRT downloads
-          const tgtsForDl = (st.tgts && st.tgts.length) ? st.tgts : [st.tgt||'es'];
-          const LNDL={en:'English',es:'Spanish',fr:'French',de:'German',pt:'Portuguese',it:'Italian',ja:'Japanese',zh:'Chinese',ar:'Arabic',ko:'Korean',ptbr:'Pt BR',nl:'Dutch',ru:'Russian',tr:'Turkish',vi:'Vietnamese',pl:'Polish',sv:'Swedish',he:'Hebrew',id:'Indonesian',ms:'Malay'};
-          $('succ-l1').textContent = 'Your captions';
-          $('succ-l2').textContent = 'are ready.';
-          $('succ-l3').textContent = 'Download below';
-          const dl = $('succ-delivery');
-          dl.className = 'succ-delivery'; dl.style.display = 'flex';
-          dl.innerHTML = tgtsForDl.map(lang => `<div class="succ-dl-card"><i class="ph ph-subtitles" style="font-size:22px;color:#00d88e;flex-shrink:0;"></i><div style="min-width:0;"><div class="succ-dl-card-lang">${LNDL[lang]||lang.toUpperCase()}</div><div class="succ-dl-card-meta">SRT · ${(st.segs||[]).length} segments</div></div><button class="succ-dl-btn" onclick="downloadSRT('${lang}')">↓ SRT</button></div>`).join('');
-          show('success-screen');
+          // Guided captions OR captions+VO ('both') — both flows now run the
+          // captions pipeline first. The transcript screen in wfStep=3 is the
+          // editor + preview + download in one. Each language gets a per-tab
+          // "Approve & Download SRT" cycle. For 'both', the last language's
+          // download advances to VO; for captions-only, it goes to a success
+          // screen with re-download cards.
+          _enterTranslatedTranscriptReview();
         }
       } else {
         // Switch to next unapproved language
@@ -45637,6 +45965,7 @@ const AZ_DEFAULTS = {
   transKey:     '',
   transRegion:  'eastus',
   whisperKey:   '',
+  anthropicKey: '',
 };
 const azCfg = Object.assign({}, AZ_DEFAULTS, JSON.parse(_ls.getItem('welo_az_cfg')||'{}'));
 function getAzSpeechKey()  { return azCfg.speechKey    || AZ_DEFAULTS.speechKey; }
@@ -45659,6 +45988,7 @@ function openSettingsModal(){
   const tk=$('az-trans-key-inp'),  tr=$('az-trans-region-sel');
   const wk=$('whisper-key-inp');
   const ek=$('el-api-key-inp'),    ev=$('el-voice-id-inp');
+  const ak=$('anthropic-key-inp');
   if(sk) sk.value = azCfg.speechKey    || '';
   if(sr) sr.value = azCfg.speechRegion || 'eastus';
   if(tk) tk.value = azCfg.transKey     || '';
@@ -45666,6 +45996,7 @@ function openSettingsModal(){
   if(wk) wk.value = azCfg.whisperKey   || '';
   if(ek) ek.value = azCfg.elKey        || '';
   if(ev) ev.value = azCfg.elVoiceId    || '';
+  if(ak) ak.value = azCfg.anthropicKey || '';
   m.style.display='flex';
   document.body.style.overflow='hidden';
 }
@@ -45682,6 +46013,7 @@ function saveAllCredentials(){
   const wk=$('whisper-key-inp')?.value.trim();
   const ek=$('el-api-key-inp')?.value.trim();
   const ev=$('el-voice-id-inp')?.value.trim();
+  const ak=$('anthropic-key-inp')?.value.trim();
   if(sk !== undefined) azCfg.speechKey    = sk;
   if(sr) azCfg.speechRegion = sr;
   if(tk !== undefined) azCfg.transKey     = tk;
@@ -45689,6 +46021,7 @@ function saveAllCredentials(){
   if(wk) azCfg.whisperKey   = wk;
   if(ek) azCfg.elKey        = ek;
   if(ev) azCfg.elVoiceId    = ev;
+  if(ak !== undefined) azCfg.anthropicKey = ak;
   saveAzCfg();
   AZURE_SPEECH_KEY = getAzSpeechKey(); AZURE_SPEECH_REGION = getAzSpeechRegion();
   AZURE_TRANS_KEY  = getAzTransKey();  AZURE_TRANS_REGION  = getAzTransRegion();
@@ -45707,11 +46040,13 @@ document.addEventListener('click', e => {
   const sk=$('az-speech-key-inp'), sr=$('az-speech-region-sel');
   const tk=$('az-trans-key-inp'),  tr=$('az-trans-region-sel');
   const wk=$('whisper-key-inp');
+  const ak=$('anthropic-key-inp');
   if(sk) sk.value = azCfg.speechKey    || '';
   if(sr) sr.value = azCfg.speechRegion || 'eastus';
   if(tk) tk.value = azCfg.transKey     || '';
   if(tr) tr.value = azCfg.transRegion  || 'westus2';
   if(wk) wk.value = azCfg.whisperKey   || '';
+  if(ak) ak.value = azCfg.anthropicKey || '';
 })();
 
 function saveAzCredentials(){
@@ -45727,7 +46062,7 @@ function saveAzCredentials(){
   // Sync legacy globals
   AZURE_SPEECH_KEY = getAzSpeechKey(); AZURE_SPEECH_REGION = getAzSpeechRegion();
   AZURE_TRANS_KEY  = getAzTransKey();  AZURE_TRANS_REGION  = getAzTransRegion();
-  toast('Azure credentials saved ✓','success');
+  toast('Opal A credentials saved ✓','success');
 }
 
 function saveWhisperKey(){
@@ -45737,6 +46072,180 @@ function saveWhisperKey(){
 }
 
 function getWhisperKey(){ return azCfg.whisperKey || ''; }
+
+function getAnthropicKey(){ return azCfg.anthropicKey || ''; }
+function saveAnthropicKey(){
+  const ak = $('anthropic-key-inp')?.value.trim();
+  if(ak){ azCfg.anthropicKey = ak; saveAzCfg(); toast('Opal C API key saved ✓','success'); }
+  else toast('Please paste an Opal C API key first','');
+}
+// ─── PRE-FLIGHT LANGUAGE DIAGNOSTIC ──────────────────────────────────────────
+// Translate a fixed English sample into every supported target language using
+// both Claude (with length budget) and Azure Translator, then surface a
+// per-language pass/fail readout so the user can spot any broken locale
+// before a live demo.
+const LANG_DIAG_TARGETS = [
+  'es','fr','de','it','pt','ptbr','nl','sv','pl',
+  'ja','zh','ko','ar','he','tr','vi','id','ms','ru',
+];
+const LANG_DIAG_NAMES = {
+  es:'Spanish',fr:'French',de:'German',it:'Italian',pt:'Portuguese (EU)',ptbr:'Portuguese (BR)',
+  nl:'Dutch',sv:'Swedish',pl:'Polish',ja:'Japanese',zh:'Chinese',ko:'Korean',ar:'Arabic',
+  he:'Hebrew',tr:'Turkish',vi:'Vietnamese',id:'Indonesian',ms:'Malay',ru:'Russian',
+};
+const LANG_DIAG_SAMPLE = 'We deliver high-quality video localization for global teams.';
+
+async function _diagClaudeOne(toLang){
+  const key = getAnthropicKey();
+  if(!key) throw new Error('no key');
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST',
+    headers:{
+      'x-api-key': key,
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true',
+      'Content-Type':'application/json',
+    },
+    body: JSON.stringify({
+      model:'claude-haiku-4-5-20251001',
+      max_tokens:200,
+      system:'You are a professional video voice-over translator. Translate the user-provided line into the requested language. Return ONLY the translation, no commentary, no quotes.',
+      messages:[{ role:'user', content:`Translate to ${LANG_DIAG_NAMES[toLang]||toLang}: ${LANG_DIAG_SAMPLE}` }],
+    }),
+  });
+  if(!r.ok){
+    const e = await r.json().catch(()=>({}));
+    throw new Error(e.error?.message || `HTTP ${r.status}`);
+  }
+  const data = await r.json();
+  const txt = (data.content && data.content[0] && data.content[0].text || '').trim();
+  if(!txt) throw new Error('empty response');
+  return txt;
+}
+
+async function _diagAzureOne(toLang){
+  if(!getAzTransKey()) throw new Error('no Azure key');
+  const out = await azureTranslate([LANG_DIAG_SAMPLE], toLang);
+  if(!out || !out[0]) throw new Error('empty response');
+  return out[0];
+}
+
+async function runTranslationDiagnostic(){
+  const btn  = $('lang-diag-btn');
+  const stEl = $('lang-diag-status');
+  const list = $('lang-diag-results');
+  if(!list || !btn || !stEl) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Testing…';
+  stEl.style.display = 'inline';
+  stEl.style.color = '#888';
+  stEl.textContent = `0 / ${LANG_DIAG_TARGETS.length}`;
+
+  list.style.display = 'block';
+  list.innerHTML = `<div style="display:grid;grid-template-columns:140px 1fr 1fr;background:#f7f8fa;border-bottom:1px solid #e3e6e9;padding:7px 10px;font-weight:700;color:#333;letter-spacing:0.04em;text-transform:uppercase;font-size:10px;">
+    <span>Language</span><span>Opal C</span><span>Opal A</span>
+  </div>` + LANG_DIAG_TARGETS.map(l => `
+    <div id="diag-row-${l}" style="display:grid;grid-template-columns:140px 1fr 1fr;border-bottom:1px solid #f0f2f4;padding:8px 10px;align-items:start;">
+      <span style="font-weight:700;color:#1a2332;">${LANG_DIAG_NAMES[l]||l}<span style="opacity:0.5;margin-left:6px">${l.toUpperCase()}</span></span>
+      <span class="claude" style="color:#888;">…</span>
+      <span class="azure" style="color:#888;">…</span>
+    </div>`).join('');
+
+  let claudePass = 0, claudeFail = 0, azurePass = 0, azureFail = 0;
+  const hasClaude = !!getAnthropicKey();
+  const hasAzure  = !!getAzTransKey();
+
+  // Run with mild concurrency (4 in flight) — fast without hammering rate limits.
+  const CONCURRENCY = 4;
+  const queue = LANG_DIAG_TARGETS.slice();
+  let done = 0;
+
+  async function worker(){
+    while(queue.length){
+      const lang = queue.shift();
+      const row = $('diag-row-'+lang);
+      const cCell = row && row.querySelector('.claude');
+      const aCell = row && row.querySelector('.azure');
+
+      // Claude
+      if(hasClaude){
+        try {
+          const txt = await _diagClaudeOne(lang);
+          if(cCell){ cCell.style.color = '#16a34a'; cCell.innerHTML = `<span style="color:#22c55e">✓</span> <span style="color:#111;font-family:var(--font-sans);white-space:normal;word-break:break-word;">${esc(txt)}</span>`; }
+          claudePass++;
+        } catch(e){
+          if(cCell){ cCell.style.color = '#dc2626'; cCell.innerHTML = `<span style="color:#ef4444">✗</span> <span style="color:#dc2626">${esc(e.message)}</span>`; }
+          claudeFail++;
+        }
+      } else if(cCell){ cCell.innerHTML = `<span style="color:#999">— no key</span>`; }
+
+      // Azure
+      if(hasAzure){
+        try {
+          const txt = await _diagAzureOne(lang);
+          if(aCell){ aCell.style.color = '#16a34a'; aCell.innerHTML = `<span style="color:#22c55e">✓</span> <span style="color:#111;font-family:var(--font-sans);white-space:normal;word-break:break-word;">${esc(txt)}</span>`; }
+          azurePass++;
+        } catch(e){
+          if(aCell){ aCell.style.color = '#dc2626'; aCell.innerHTML = `<span style="color:#ef4444">✗</span> <span style="color:#dc2626">${esc(e.message)}</span>`; }
+          azureFail++;
+        }
+      } else if(aCell){ aCell.innerHTML = `<span style="color:#999">— no key</span>`; }
+
+      done++;
+      stEl.textContent = `${done} / ${LANG_DIAG_TARGETS.length}`;
+    }
+  }
+
+  const workers = Array.from({length: Math.min(CONCURRENCY, LANG_DIAG_TARGETS.length)}, () => worker());
+  await Promise.all(workers);
+
+  // Final summary line at the top of the results panel.
+  const summary = document.createElement('div');
+  summary.style.cssText = 'padding:10px 12px;background:#f0fdf4;border-bottom:1px solid #d1fae5;font-family:var(--font-sans);font-size:12px;color:#065f46;font-weight:600;';
+  const cTxt = hasClaude ? `Opal C ${claudePass}/${LANG_DIAG_TARGETS.length} ✓` : 'Opal C: no key';
+  const aTxt = hasAzure  ? `Opal A ${azurePass}/${LANG_DIAG_TARGETS.length} ✓`  : 'Opal A: no key';
+  const anyFail = claudeFail || azureFail;
+  summary.style.background = anyFail ? '#fef2f2' : '#f0fdf4';
+  summary.style.borderBottomColor = anyFail ? '#fecaca' : '#d1fae5';
+  summary.style.color = anyFail ? '#991b1b' : '#065f46';
+  summary.textContent = `${cTxt}  ·  ${aTxt}${anyFail ? '  — review failures below' : '  — all languages OK'}`;
+  list.insertBefore(summary, list.firstChild);
+
+  stEl.style.color = anyFail ? '#dc2626' : '#22c55e';
+  stEl.textContent = anyFail ? `Done — ${claudeFail + azureFail} failure${(claudeFail+azureFail)!==1?'s':''}` : 'All good ✓';
+  btn.disabled = false;
+  btn.textContent = 'Test all languages';
+}
+
+async function testAnthropicKey(){
+  const btn = $('anthropic-test-btn'), st2 = $('anthropic-status');
+  const key = $('anthropic-key-inp')?.value.trim() || getAnthropicKey();
+  if(!key){ if(st2){ st2.style.display='inline'; st2.textContent='⚠ No key entered'; st2.style.color='#e05555'; } return; }
+  if(btn){ btn.disabled = true; btn.textContent = 'Testing…'; }
+  if(st2){ st2.style.display='inline'; st2.textContent='…'; st2.style.color='#888'; }
+  try {
+    // Tiny round-trip to validate the key. anthropic-dangerous-direct-browser-access
+    // lets the request go through from a browser origin.
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 8,
+        messages: [{ role:'user', content:'ping' }],
+      }),
+    });
+    if(r.ok){ if(st2){ st2.textContent='✓ Key valid'; st2.style.color='#22c55e'; } }
+    else { const d = await r.json().catch(()=>({})); if(st2){ st2.textContent = '✗ ' + (d.error?.message || r.status); st2.style.color='#e05555'; } }
+  } catch(e){ if(st2){ st2.textContent = '✗ Network error'; st2.style.color='#e05555'; } }
+  if(btn){ btn.disabled = false; btn.textContent = 'Test Key'; }
+}
 
 async function testWhisperKey(){
   const btn=$('whisper-test-btn'), st2=$('whisper-status');
@@ -46764,7 +47273,7 @@ const PSTEPS=()=>[{l:'Extracting audio track',i:'◈'},{l:'Detecting language & 
 // function saveJobs(j) — in shared utilities
 // function updateJob(id, upd) — in shared utilities
 
-const BK_STATUS_LABELS = {submitted:'Submitted',in_review:'In Review',in_progress:'In Progress',qa:'QA',ready_for_review:'Ready for Review',delivered:'Delivered'};
+const BK_STATUS_LABELS = {submitted:'Submitted',in_review:'In Review',in_progress:'In Progress',qa:'QA',ready_for_review:'Ready for Review',delivered:'Completed'};
 const BK_STATUS_COLORS = {submitted:'#64748b',in_review:'#1d4ed8',in_progress:'#c2410c',qa:'#7e22ce',ready_for_review:'#0f766e',delivered:'#166534'};
 const BK_STATUS_BG    = {submitted:'#f1f5f9',in_review:'#dbeafe',in_progress:'#fff7ed',qa:'#f3e8ff',ready_for_review:'#ccfbf1',delivered:'#dcfce7'};
 const BK_URGENCY_COLORS = {submitted:'#e2e8f0',in_review:'#3b82f6',in_progress:'#f97316',qa:'#a855f7',ready_for_review:'#14b8a6',delivered:'#22c55e'};
@@ -46933,19 +47442,77 @@ function openJobFromQueue(id){
   // Init per-language voice selections
   st.voicePerLang = {};
 
-  // ── Route based on work mode ──────────────────────────────────────────────
+  // ── Route based on completion + work mode ────────────────────────────────
+  if(j.status === 'delivered'){
+    // Already-completed jobs: re-open at the delivery screen so the user
+    // can re-download or jump back into the timeline editor without
+    // re-running the whole pipeline. Note: the actual TTS blobs are only
+    // in memory while the session is alive — if the page has been reloaded
+    // since completion, the user will need to re-generate VO to get blobs
+    // back, but at minimum the language config + completion state is
+    // preserved.
+    _reopenDeliveredJob(j);
+    return;
+  }
   if(st.tier === 'smart' && st.smartWorkMode === 'auto'){
     setTimeout(()=>{
       const relayTag = j.source==='relay' && j.relayProjectId ? ` · Relay ${j.relayProjectId}` : '';
       toast(`Opened: ${j.projectName}${relayTag} · Running automated pipeline…`, 'info', 5000);
     }, 400);
-    enterSmartAutoTranslate();
+    // CRITICAL: auto mode must still transcribe the user's REAL file before
+    // translating — skipping ASR translates the placeholder demo segments
+    // generated above instead of the actual uploaded content.
+    if(st.file){
+      st.engine    = 'azure';
+      st.asrEngine = 'azure';
+      startProc(); // ASR → on success, enterTranscript → auto-bypass → enterSmartAutoTranslate
+    } else {
+      // No file attached — fall back to the demo-segment auto-translate path
+      // (only happens when re-opening a job that has lost its file reference).
+      enterSmartAutoTranslate();
+    }
   } else {
     enterASREngine();
     setTimeout(()=>{
       const relayTag = j.source==='relay' && j.relayProjectId ? ` · Relay ${j.relayProjectId}` : '';
       toast(`Opened: ${j.projectName}${relayTag} · Select ASR engine to begin transcription`, 'info', 5000);
     }, 400);
+  }
+}
+
+// Re-open a completed job at the appropriate "finished" surface so users can
+// re-download deliverables or jump back into editing. Detects what the job
+// produced (captions / VO / both) from j.completedMode and routes accordingly.
+function _reopenDeliveredJob(j){
+  const mode = j.completedMode || (j.smartMode === 'captions' ? 'captions' : (j.smartMode === 'synth-vo' ? 'vo' : 'vo'));
+  const tgts = (j.completedLangs && j.completedLangs.length) ? j.completedLangs : (j.tgtLangs || ['es']);
+  st.wfStep = 3;
+
+  if(mode === 'captions'){
+    // Captions-only completion → success screen with re-download cards.
+    toast(`Re-opening ${j.projectName} · captions delivered`, 'info', 4000);
+    // The downloadSRT() helper reads from st.transPerLang, which may not be
+    // restored mid-session reload; if so, downloads will fall back to the
+    // source segments. For an in-session re-open everything still works.
+    showCaptionsFinishedScreen(tgts);
+    return;
+  }
+
+  // VO or captions+VO completion → land on the delivery screen so they can
+  // re-download or re-edit. If TTS blobs are still in memory, the play
+  // preview and downloads work; if not, the user needs to re-generate.
+  const hasBlobs = tgts.some(l => (_voPreviewBlobsPerLang[l]||[]).length);
+  if(hasBlobs){
+    _voActivePrevLang = tgts[0];
+    _svActiveLang = tgts[0];
+    _voPreviewBlobs = _voPreviewBlobsPerLang[tgts[0]] || [];
+    showAssetsReceived(_voPreviewBlobs);
+    toast(`Re-opened ${j.projectName} · ready to re-download or re-edit`, 'success', 4000);
+  } else {
+    // No blobs in memory (likely a page reload) — fall back to running the
+    // VO setup screen so the user can re-generate.
+    toast(`Re-opening ${j.projectName} · re-generate voice-over to access downloads`, 'info', 5000);
+    enterSV();
   }
 }
 
@@ -47176,11 +47743,124 @@ async function azureTranslate(texts, toLang) {
   return data.map(r=>r.translations[0].text);
 }
 
+// ─── CLAUDE (ANTHROPIC) LENGTH-BUDGETED TRANSLATION FOR VOICE-OVER ───
+// Per-language natural speaking rate in characters per second. Used to
+// budget how many characters of translation can fit in each segment's
+// time slot without forcing the TTS engine into unnatural speed.
+const VO_SPEAKING_RATE = {
+  en: 15, es: 14, fr: 14, de: 12, it: 14, pt: 14, ptbr: 14,
+  ja: 9,  zh: 7,  ko: 11, ar: 13, ru: 12, tr: 13, vi: 12,
+  pl: 12, sv: 13, he: 12, id: 13, ms: 13, nl: 13,
+};
+
+function _voCharBudget(segDur, lang){
+  const rate = VO_SPEAKING_RATE[(lang||'').toLowerCase()] || 13;
+  // 95% safety margin so the TTS engine doesn't sit right at the edge.
+  return Math.max(8, Math.round(segDur * rate * 0.95));
+}
+
+// Translate a batch of segments via Claude with explicit per-segment
+// character budgets. Returns an array of strings aligned to `segs`.
+async function claudeTranslateForVO(segs, toLang){
+  const key = getAnthropicKey();
+  if(!key) throw new Error('No Anthropic API key — add one in Settings');
+
+  const LN = {en:'English',es:'Spanish',fr:'French',de:'German',pt:'Portuguese',
+    it:'Italian',ja:'Japanese',zh:'Chinese',ar:'Arabic',ko:'Korean',
+    ptbr:'Brazilian Portuguese',nl:'Dutch',ru:'Russian',tr:'Turkish',
+    vi:'Vietnamese',pl:'Polish',sv:'Swedish',he:'Hebrew',id:'Indonesian',ms:'Malay'};
+  const targetName = LN[(toLang||'').toLowerCase()] || toLang;
+
+  // Batch segments together so Claude can see context. 25 per call keeps
+  // the prompt small and lets us retry just the bad batch on failure.
+  const BATCH = 25;
+  const out = new Array(segs.length);
+
+  for(let off = 0; off < segs.length; off += BATCH){
+    const batch = segs.slice(off, off + BATCH);
+    const items = batch.map((s, i) => ({
+      i: off + i,
+      src: (s.orig || s.tgt || '').trim(),
+      max: _voCharBudget(Math.max(0.3, (s.end || 0) - (s.start || 0)), toLang),
+    }));
+
+    const systemMsg = `You are a professional video voice-over translator. Translate each line into ${targetName} so the spoken result fits within the given character budget at a natural speaking pace. Preserve meaning and tone. Prefer concise phrasing; drop filler words and tighten grammar before sacrificing meaning. Never exceed max_chars by more than 10%.`;
+
+    const userMsg = `Translate each line below into ${targetName}. Stay within each line's max_chars. Return ONLY a JSON array of strings in the same order, no commentary.
+
+${JSON.stringify(items, null, 2)}`;
+
+    let parsed = null;
+    let attempt = 0;
+    while(attempt < 2 && !parsed){
+      attempt++;
+      try {
+        const r = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': key,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 4096,
+            system: systemMsg,
+            messages: [{ role:'user', content: userMsg }],
+          }),
+        });
+        if(!r.ok){
+          const e = await r.json().catch(()=>({}));
+          throw new Error(e.error?.message || `Claude API ${r.status}`);
+        }
+        const data = await r.json();
+        const txt = (data.content && data.content[0] && data.content[0].text) || '';
+        // Tolerate code fences or stray prose around the JSON.
+        const match = txt.match(/\[[\s\S]*\]/);
+        parsed = JSON.parse(match ? match[0] : txt);
+        if(!Array.isArray(parsed) || parsed.length !== batch.length){
+          parsed = null;
+          throw new Error('Unexpected response shape');
+        }
+      } catch(e){
+        console.warn(`[claudeTranslate] attempt ${attempt} failed:`, e);
+        if(attempt >= 2) throw new Error(`Opal C translation failed: ${e.message}`);
+      }
+    }
+
+    parsed.forEach((t, i) => { out[off + i] = String(t || '').trim(); });
+  }
+
+  return out;
+}
+
+// Wrapper used by VO-bound translation paths: prefer Claude (length-aware)
+// when a key is configured, otherwise fall back to Azure Translator.
+async function translateSegmentsForVO(toLang){
+  if(getAnthropicKey()){
+    try {
+      const translated = await claudeTranslateForVO(st.segs, toLang);
+      translated.forEach((t, i) => { st.segs[i].trans = t; });
+      st.wfStep = 3;
+      renderTr();
+      updateTrStats();
+      toast(`Translated ${translated.length} segments → ${(toLang||st.tgt).toUpperCase()} via Opal C (length-budgeted) ✓`,'success',4000);
+      return;
+    } catch(e){
+      toast(`Opal C fell back to Opal A: ${e.message}`, '#ca8a04', 4500);
+      // Fall through to Azure
+    }
+  }
+  await translateSegmentsWithAzure(toLang);
+}
+
 // Translate all segments using Azure Translator, then refresh UI
 async function translateSegmentsWithAzure(toLang) {
   const btn = $('tr-az-translate');
   const origText = btn ? btn.textContent : '';
   if(btn){btn.disabled=true; btn.textContent='Translating…';}
+  let _threw = null;
   try {
     const sources = st.segs.map(s=>s.orig);
     const translated = await azureTranslate(sources, toLang || st.tgt);
@@ -47189,11 +47869,16 @@ async function translateSegmentsWithAzure(toLang) {
     // stepper suppressed — opal-screen is a full-video screen
     renderTr();
     updateTrStats();
-    toast(`Translated ${translated.length} segments → ${(toLang||st.tgt).toUpperCase()} via Azure Translator ✓`,'success',4000);
+    toast(`Translated ${translated.length} segments → ${(toLang||st.tgt).toUpperCase()} via Opal A ✓`,'success',4000);
   } catch(err) {
-    toast('Azure Translator error: '+err.message,'');
+    console.error('[translateSegmentsWithAzure]', toLang, err);
+    toast(`Opal A error (${(toLang||'').toUpperCase()}): ${err.message}`, '#e53e3e', 6000);
+    _threw = err;
   }
   if(btn){btn.disabled=false; btn.textContent=origText;}
+  // Re-throw so callers (e.g. enterSmartAutoTranslate) know the lang failed
+  // and don't silently produce an English-target deliverable.
+  if(_threw) throw _threw;
 }
 
 // ─── AZURE SPEECH ───
@@ -47464,7 +48149,7 @@ async function _azureRestTranscribe(pcm, progressCb) {
 // ── Main entry point: SDK first (best quality), REST fallback (works where WebSocket is blocked) ──
 async function azureSpeechTranscribe(file, progressCb) {
   const key = getAzSpeechKey();
-  if(!key) throw new Error('No Azure Speech key — open Settings and save your credentials first');
+  if(!key) throw new Error('No Opal A key — open Settings and save your credentials first');
   const pcm = await decodeFileToPCM(file, progressCb);
   progressCb && progressCb('Connecting to Azure Speech…');
 
@@ -47574,10 +48259,15 @@ function startProc(){
 // Real Azure Speech processing
 async function startAzureProc(){
   const fill=$('proc-fill'), sc=$('proc-steps');
-  $('proc-title').textContent='Transcribing with Azure Speech…';
+  // Display the engine the user actually picked, even though the backend
+  // always routes through Azure. Falls back to "Azure Speech" if the lookup
+  // fails for any reason.
+  const _engineEntry = ASR_ENGINES.find(e => e.id === (st.asrEngine || st.engine || 'azure'));
+  const engineName = (_engineEntry && _engineEntry.name) || 'Azure Speech';
+  $('proc-title').textContent = `Transcribing with ${engineName}…`;
   const stepDefs = [
     'Extracting audio track',
-    'Connecting to Azure Speech Services',
+    `Connecting to ${engineName}`,
     'Running speech recognition…',
     'Segmenting & aligning timecodes',
     'Running quality pre-check',
@@ -47616,7 +48306,7 @@ async function startAzureProc(){
     await new Promise(r=>setTimeout(r,700));
     markDone(4);
     fill.style.width='100%';
-    toast(`Azure Speech: ${st.segs.length} segments transcribed ✓`,'success');
+    toast(`${engineName}: ${st.segs.length} segments transcribed ✓`,'success');
     setTimeout(enterTranscript, 600);
   } else {
     fill.style.width='0%';
@@ -47710,19 +48400,35 @@ function fixEditorHeight(){
 window.addEventListener('resize',fixEditorHeight);
 
 // ─── SCREEN 3 ───
+// Refresh the `tr-opal` (Approve & Continue) button label based on current
+// pipeline state. Delegates to `_trUpdateOpalLabel` for the translated-pass
+// captions/both flows (per-language SRT download cycle); falls back to the
+// short fixed labels for everything else.
 function updateSmartTrBtn(){
   const btn = $('tr-opal'); if(!btn || st.tier !== 'smart') return;
   const mode = st.smartMode || 'captions';
+  const workMode = st.smartWorkMode || 'guided';
   const translated = !!(st.transPerLang && Object.keys(st.transPerLang).length);
   if(!translated){ btn.textContent = 'Approve & Continue →'; return; }
+  // Translated transcript review (wfStep>=3) for captions / captions+VO —
+  // identical behaviour for guided AND auto modes (per-language Approve &
+  // Download SRT cycle). Delegate to the dedicated labeller.
+  if((mode === 'captions' || mode === 'both') && st.wfStep >= 3){
+    _trUpdateOpalLabel();
+    return;
+  }
   if(mode === 'captions')   btn.textContent = 'Download SRT →';
   else if(mode === 'synth-vo') btn.textContent = 'Create Voice-Over →';
-  else                      btn.textContent = 'Continue to Voice-Over →'; // both
+  else                      btn.textContent = 'Continue to Voice-Over →'; // both, automated
 }
 
 function enterTranscript(){
-  // Automated SMART mode — skip transcript review entirely
-  if(st.tier === 'smart' && st.smartWorkMode === 'auto'){
+  // Automated SMART mode skips the SOURCE transcript review (wfStep<3) by
+  // jumping straight to auto-translate. The translated transcript review
+  // (wfStep===3) is still part of the auto pipeline — and re-routing it
+  // back through enterSmartAutoTranslate creates an infinite loop that
+  // hammers the translation APIs until they error.
+  if(st.tier === 'smart' && st.smartWorkMode === 'auto' && (st.wfStep || 1) < 3){
     enterSmartAutoTranslate();
     return;
   }
@@ -47770,6 +48476,13 @@ function enterTranscript(){
     {id:'spk3',name:'Speaker 2', color:'#a78bfa',role:''},
   ];
   renderTr();updateTrStats();show('transcript-screen');
+  _trRenderLangTabs();
+  _trUpdateOpalLabel();
+  // Reset segment list scroll so segment 1 is the first thing the user
+  // sees — otherwise the browser preserves the previous scroll position
+  // when this screen is re-entered (e.g. after translation review).
+  document.querySelectorAll('#transcript-screen .nk-sub-list').forEach(el => { el.scrollTop = 0; });
+  nkSelIdx = 0;
   lucide.createIcons();
   if(typeof refreshSpeakerSelects==='function') refreshSpeakerSelects();
   // Fix editor height AFTER the screen + stepper are fully rendered
@@ -47896,6 +48609,250 @@ function nkZoomFit(){
 function nkTc(s){
   const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=Math.floor(s%60),ms=Math.round((s%1)*1000);
   return[String(h).padStart(2,'0'),String(m).padStart(2,'0'),String(sc).padStart(2,'0')].join(':')+'.'+String(ms).padStart(3,'0');
+}
+
+// Tabs on transcript-screen for switching between target languages during
+// translated-transcript review. Visible only when wfStep>=3 (translated mode)
+// and the user picked multiple target languages.
+function _trRenderLangTabs(){
+  const el = $('tr-lang-tabs');
+  if(!el) return;
+  const tgts = (st.tgts && st.tgts.length) ? st.tgts.slice() : [];
+  const inTranslated = st.wfStep >= 3;
+  if(!inTranslated || tgts.length < 2){ el.style.display = 'none'; return; }
+  const LN={en:'English',es:'Spanish',fr:'French',de:'German',pt:'Portuguese',it:'Italian',
+    ja:'Japanese',zh:'Chinese',ar:'Arabic',ko:'Korean',ptbr:'Pt (BR)',nl:'Dutch',
+    ru:'Russian',tr:'Turkish',vi:'Vietnamese',pl:'Polish',sv:'Swedish',he:'Hebrew',
+    id:'Indonesian',ms:'Malay'};
+  const active = st.tgt;
+  const done = st.captionsDl || {};
+  el.style.display = 'flex';
+  el.innerHTML = tgts.map(lang => {
+    const isActive = lang === active;
+    const isDone   = !!done[lang];
+    const accent   = isDone ? 'var(--wl-mint-500,#00d88e)' : (isActive ? 'var(--wl-mint-500,#00d88e)' : 'rgba(255,255,255,0.12)');
+    const bg       = isActive ? 'var(--wl-mint-500,#00d88e)' : (isDone ? 'rgba(0,216,142,0.12)' : 'rgba(255,255,255,0.04)');
+    const fg       = isActive ? '#0a0e17' : (isDone ? 'var(--wl-mint-500,#00d88e)' : 'rgba(255,255,255,0.65)');
+    const icon     = isDone ? '<i class="ph ph-check-circle" style="font-size:13px"></i>' : '';
+    return `<button data-tr-lang="${lang}" style="
+      padding:6px 14px;border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;
+      font-family:var(--font-sans);border:1px solid ${accent};
+      background:${bg};color:${fg};letter-spacing:0.02em;display:flex;align-items:center;gap:6px;">
+      ${icon}${LN[lang]||lang.toUpperCase()}
+      <span style="font-family:var(--font-mono);font-size:10px;font-weight:700;opacity:0.7">${lang.toUpperCase()}</span>
+    </button>`;
+  }).join('');
+  el.querySelectorAll('button[data-tr-lang]').forEach(btn => {
+    btn.addEventListener('click', () => _trSwitchLang(btn.dataset.trLang));
+  });
+}
+
+// Refresh the Approve & Continue button label so it reflects context.
+// In translated captions/both mode it becomes "Approve & Download SRT (LANG)"
+// and changes to the appropriate continue copy on the last language.
+function _trUpdateOpalLabel(){
+  const btn = $('tr-opal');
+  if(!btn) return;
+  const inTranslated = st.wfStep >= 3;
+  const mode         = st.smartMode     || 'captions';
+  const workMode     = st.smartWorkMode || 'guided';
+  // Same per-language cycle for guided AND auto on the translated transcript review.
+  const isCaptionsLike = (mode === 'captions' || mode === 'both') && inTranslated;
+
+  if(!isCaptionsLike){
+    btn.textContent = 'Approve & Continue →';
+    return;
+  }
+  const code = (st.tgt||'').toUpperCase();
+  // Keep the label short and consistent across all languages. The navigation
+  // to VO / success after the final language happens automatically post-click
+  // — no need to advertise it in the button copy.
+  btn.innerHTML = `Approve &amp; Download SRT (${code}) →`;
+}
+
+// Per-language "approve & download" handler for the translated transcript
+// review screen. Persists edits, downloads the SRT for the current language,
+// marks it done, advances to the next language, or exits the screen when
+// every language has been downloaded.
+function _trCaptionsApproveAndDownload(){
+  if(!st.captionsDl) st.captionsDl = {};
+  const lang = st.tgt;
+  const tgts = (st.tgts && st.tgts.length) ? st.tgts.slice() : [lang];
+
+  // 1. Persist edits for the active language back to transPerLang.
+  if(lang && st.transPerLang){
+    st.transPerLang[lang] = st.segs.map(s => s.trans || s.tgt || '');
+  }
+
+  // 2. Download the SRT for this language.
+  try {
+    downloadSRT(lang);
+    toast(`${(lang||'').toUpperCase()} SRT downloaded ✓`, 'success', 2500);
+  } catch(e){
+    toast(`SRT download failed: ${e.message}`, '#e53e3e', 4000);
+    return;
+  }
+
+  // 3. Mark this language as done.
+  st.captionsDl[lang] = true;
+
+  // 4. Decide what's next.
+  const remaining = tgts.filter(l => !st.captionsDl[l]);
+  if(remaining.length){
+    // More languages to go — switch to the next one, leave the user on this screen.
+    _trSwitchLang(remaining[0]);
+    _trUpdateOpalLabel();
+    return;
+  }
+
+  // 5. All languages downloaded — leave the screen.
+  // Re-edit mode: return to whichever screen sent us here instead of marching
+  // forward in the first-run pipeline (VO setup / success screen).
+  if(st.captionsReEditMode){
+    const ret = st.captionsReEditFromScreen || 'success-screen';
+    st.captionsReEditMode = false;
+    st.captionsReEditFromScreen = null;
+    toast('Translations updated · SRTs re-downloaded ✓', 'success', 3200);
+    if(ret === 'synthvo-screen'){
+      // Refresh the delivery screen's state (rebuilds download cards from
+      // the latest transPerLang values).
+      _voActivePrevLang = _voActivePrevLang || tgts[0];
+      _voPreviewBlobs   = _voPreviewBlobsPerLang[_voActivePrevLang] || _voPreviewBlobs || [];
+      showAssetsReceived(_voPreviewBlobs);
+    } else {
+      showCaptionsFinishedScreen(tgts);
+    }
+    return;
+  }
+
+  const mode = st.smartMode || 'captions';
+  if(mode === 'both'){
+    toast('All captions delivered — setting up voice-over', 'success', 2800);
+    setTimeout(() => enterSV(), 400);
+  } else {
+    // Captions-only flow — close out with the success/thank-you screen.
+    showCaptionsFinishedScreen(tgts);
+  }
+}
+
+// Land the user on the translated transcript editor (#transcript-screen
+// wfStep=3) with the first target language pre-loaded. Used by both the
+// guided post-translation-approval path and the auto-mode first-time entry —
+// so the user reaches the same review surface regardless of workMode.
+function _enterTranslatedTranscriptReview(){
+  const firstLang = (st.tgts && st.tgts.length) ? st.tgts[0] : (st.tgt || 'es');
+  if(st.transPerLang && st.transPerLang[firstLang]){
+    st.transPerLang[firstLang].forEach((t, i) => {
+      if(st.segs[i]) st.segs[i].trans = t;
+    });
+  }
+  st.tgt = firstLang;
+  st.wfStep = 3;
+  st.captionsDl = {}; // fresh per-language approval state
+  enterTranscript();
+}
+
+// Drop the user into the translated transcript editor in "re-edit mode" so
+// they can fix translations + transcript flow and re-download SRTs without
+// being re-routed through VO setup / success when the last language is approved.
+// Tracks which screen we came from so the approval-cycle completion can
+// bounce them back to it.
+function enterCaptionsReEdit(){
+  // Detect the current screen so we know where to return after.
+  const onSuccess = document.getElementById('success-screen')?.classList.contains('active');
+  st.captionsReEditFromScreen = onSuccess ? 'success-screen' : 'synthvo-screen';
+  st.captionsReEditMode = true;
+
+  // Reset per-language download state so the user explicitly re-approves each lang.
+  st.captionsDl = {};
+
+  // Make sure st.tgts and the active lang point at something sensible.
+  const tgts = (st.tgts && st.tgts.length) ? st.tgts.slice() : [st.tgt || 'es'];
+  const firstLang = tgts[0];
+  st.tgt = firstLang;
+  // Re-load the first language's translations onto seg.trans so the editor
+  // displays them immediately.
+  if(st.transPerLang && st.transPerLang[firstLang]){
+    st.transPerLang[firstLang].forEach((t, i) => {
+      if(st.segs[i]) st.segs[i].trans = t;
+    });
+  }
+  st.wfStep = 3;
+  enterTranscript();
+  toast('Edit translations or transcript flow · re-approve each language to re-download', 'info', 4500);
+}
+
+// Thank-you / completion screen for captions-only flow. Reuses the existing
+// #success-screen layout so we don't need a brand-new screen.
+function showCaptionsFinishedScreen(tgts){
+  const LN={en:'English',es:'Spanish',fr:'French',de:'German',pt:'Portuguese',it:'Italian',
+    ja:'Japanese',zh:'Chinese',ar:'Arabic',ko:'Korean',ptbr:'Pt (BR)',nl:'Dutch',
+    ru:'Russian',tr:'Turkish',vi:'Vietnamese',pl:'Polish',sv:'Swedish',he:'Hebrew',
+    id:'Indonesian',ms:'Malay'};
+  // Mark the job delivered so the dashboard shows the correct status.
+  if(st.jobId){
+    try {
+      updateJob(st.jobId, {
+        status: 'delivered',
+        completedAt: new Date().toISOString(),
+        completedMode: 'captions',
+        completedLangs: tgts.slice(),
+      });
+    } catch(e){ console.warn('[jobComplete]', e); }
+  }
+  const l1 = $('succ-l1'); if(l1) l1.textContent = 'Your captions';
+  const l2 = $('succ-l2'); if(l2) l2.textContent = 'are delivered.';
+  const l3 = $('succ-l3'); if(l3) l3.textContent = 'Re-download any time below.';
+  const dl = $('succ-delivery');
+  if(dl){
+    dl.className = 'succ-delivery'; dl.style.display = 'flex';
+    const segCount = (st.segs||[]).length;
+    dl.innerHTML = tgts.map(lang => `
+      <div class="succ-dl-card">
+        <i class="ph ph-subtitles" style="font-size:22px;color:#00d88e;flex-shrink:0;"></i>
+        <div style="min-width:0;">
+          <div class="succ-dl-card-lang">${LN[lang]||lang.toUpperCase()}</div>
+          <div class="succ-dl-card-meta">SRT · ${segCount} segments</div>
+        </div>
+        <button class="succ-dl-btn" onclick="downloadSRT('${lang}')">↓ SRT</button>
+      </div>
+    `).join('');
+  }
+  // Inject a "Re-edit translations" pill into the success-screen actions row
+  // so users can jump back into the translated transcript editor at any time.
+  const actions = document.querySelector('#success-screen .succ-actions');
+  if(actions && !actions.querySelector('#succ-reedit-btn')){
+    const reEdit = document.createElement('button');
+    reEdit.id = 'succ-reedit-btn';
+    reEdit.innerHTML = '<i class="ph ph-text-aa"></i> Re-edit translations';
+    reEdit.style.cssText = 'padding:14px 24px;background:rgba(0,216,142,0.10);color:var(--wl-mint-500,#00d88e);border:1px solid rgba(0,216,142,0.35);border-radius:999px;font-family:var(--w-font-sans,\'Inter Tight\',sans-serif);font-size:13px;font-weight:600;cursor:pointer;transition:all 160ms;display:inline-flex;align-items:center;gap:8px;';
+    reEdit.onclick = () => enterCaptionsReEdit();
+    // Insert before the "+ New Project" ghost button (which is the 2nd child).
+    actions.insertBefore(reEdit, actions.children[1] || null);
+  }
+  show('success-screen');
+}
+
+function _trSwitchLang(lang){
+  if(!st.transPerLang) st.transPerLang = {};
+  // Persist any in-flight edits for the currently active language back to
+  // transPerLang BEFORE switching, so user edits aren't lost.
+  if(st.tgt && st.segs){
+    st.transPerLang[st.tgt] = st.segs.map(s => s.trans || s.tgt || '');
+  }
+  // Load the requested language's translations onto each segment.
+  st.tgt = lang;
+  const trans = st.transPerLang[lang] || [];
+  st.segs.forEach((s, i) => { s.trans = trans[i] || ''; });
+  // Update UI bits that depend on active target language
+  const tgtEl = $('tr-mtgt'); if(tgtEl) tgtEl.textContent = (lang||'').toUpperCase();
+  _trRenderLangTabs();
+  _trUpdateOpalLabel();
+  renderTr();
+  updateTrStats && updateTrStats();
+  // Reset scroll so the new language starts from segment 1.
+  document.querySelectorAll('#transcript-screen .nk-sub-list').forEach(el => { el.scrollTop = 0; });
+  nkSelIdx = 0;
 }
 
 function renderTr(){
@@ -48431,20 +49388,56 @@ $('tr-reset').addEventListener('click',()=>{
 $('tr-opal').addEventListener('click',()=>{
   try{
     if(st.tier === 'smart'){
-      const mode = st.smartMode || 'captions';
+      const mode     = st.smartMode     || 'captions';
+      const workMode = st.smartWorkMode || 'guided';
       const translated = !!(st.transPerLang && Object.keys(st.transPerLang).length);
+
+      // Not yet translated → run auto-translate. Its own routing logic will
+      // forward to the correct next screen (translation review for guided,
+      // delivery/SV for automated).
       if(!translated){
         enterSmartAutoTranslate();
-      } else if(mode === 'captions'){
+        return;
+      }
+
+      // GUIDED CAPTIONS or CAPTIONS+VO ('both'):
+      //   - First pass (wfStep<3): user is on the source transcript review.
+      //     Approve & Continue → translation-review-screen (existing).
+      //   - Translated pass (wfStep>=3): the transcript screen IS the
+      //     caption preview. The button per-language does:
+      //       1. Save in-flight edits
+      //       2. Download that language's SRT
+      //       3. Mark the language as done
+      //       4. If more languages remain, switch to the next one
+      //       5. Otherwise: VO setup (mode='both') or thank-you (mode='captions')
+      // CAPTIONS or CAPTIONS+VO (guided OR auto) on the translated transcript
+      // review: same per-language Approve & Download SRT cycle for both modes.
+      // For non-translated pass, only guided routes through the side-by-side
+      // translation review screen (auto skips it).
+      if((mode === 'captions' || mode === 'both')){
+        if(st.wfStep >= 3){
+          _trCaptionsApproveAndDownload();
+        } else if(workMode === 'guided'){
+          enterTranslationReview();
+        } else {
+          // Auto mode pre-translation — kick off the auto pipeline.
+          enterSmartAutoTranslate();
+        }
+        return;
+      }
+
+      // Other guided flows (VO, both) — translation review screen for human approval.
+      if(workMode === 'guided'){
+        enterTranslationReview();
+        return;
+      }
+
+      // Automated mode — skip review and go straight to the deliverable.
+      if(mode === 'captions'){
         const tgts=(st.tgts&&st.tgts.length)?st.tgts:[st.tgt||'es'];
         if(tgts.length>1&&st.transPerLang) openSRTMultiLang(tgts); else openSRT(true);
       } else {
-        // guided: go to translation review; automated: already handled by enterSmartAutoTranslate
-        if(st.smartWorkMode === 'auto'){
-          enterSV();
-        } else {
-          enterTranslationReview();
-        }
+        enterSV();
       }
     } else { enterRouting(); }
   }
@@ -48492,14 +49485,14 @@ $('smart-vo-btn').addEventListener('click',()=>enterSV());
 $('smart-go-dash').addEventListener('click',()=>openDashboard());
 $('op-send').addEventListener('click', async ()=>{
   if(!getAzTransKey()){
-    toast('No Azure Translator key — open Settings and save your credentials first','error',5000);
+    toast('No Opal A key — open Settings and save your credentials first','error',5000);
     return;
   }
   const sendBtn=$('op-send');
   sendBtn.disabled=true;
   $('opal-prog').style.display='block';
   const fill=$('op-fill');
-  $('op-msg').textContent='Connecting to Azure Translator…';
+  $('op-msg').textContent='Connecting to Opal A…';
   fill.style.width='15%';
   const toLang = st.tgt || (st.tgts && st.tgts[0]) || 'es';
   try {
@@ -49107,6 +50100,102 @@ async function voExportAudio(){
 let _voPreviewCtx         = null; // AudioContext kept alive for scheduled playback
 let _voPreviewBlobs       = null; // blobs for currently active preview language
 let _voPreviewSrcs        = [];   // active BufferSource nodes (so we can stop them)
+let _voDecodedItems       = [];   // [{buf, segStart, scheduledStart}] post-decode timing plan
+let _voListenersAttached  = false;// guard so persistent listeners attach only once
+
+// ── Pitch-preserving time-stretch (SoundTouchJS, loaded on demand) ───────────
+let _soundTouchLib         = null;
+let _soundTouchLoadPromise = null;
+function _loadSoundTouchOnce(){
+  if(_soundTouchLib) return Promise.resolve(_soundTouchLib);
+  if(_soundTouchLoadPromise) return _soundTouchLoadPromise;
+  // Use esm.sh which serves any npm package as a proper ES module — far
+  // more reliable than guessing UMD bundle paths.
+  _soundTouchLoadPromise = (async () => {
+    const SRCS = [
+      'https://esm.sh/soundtouchjs@0.1.30',
+      'https://cdn.jsdelivr.net/npm/soundtouchjs@0.1.30/+esm',
+    ];
+    for(const url of SRCS){
+      try {
+        const mod = await import(/* @vite-ignore */ url);
+        const d   = mod && (mod.default || mod);
+        const lib = {
+          SoundTouch:            mod.SoundTouch            || (d && d.SoundTouch),
+          SimpleFilter:          mod.SimpleFilter          || (d && d.SimpleFilter),
+          WebAudioBufferSource:  mod.WebAudioBufferSource  || (d && d.WebAudioBufferSource),
+        };
+        if(lib.SoundTouch && lib.SimpleFilter && lib.WebAudioBufferSource){
+          console.log('[soundtouch] loaded via', url);
+          _soundTouchLib = lib;
+          return _soundTouchLib;
+        }
+        console.warn('[soundtouch] bundle from', url, 'missing exports; trying next…');
+      } catch(e){
+        console.warn('[soundtouch] failed to load from', url, e.message);
+      }
+    }
+    console.warn('[soundtouch] all CDN sources failed — falling back to AudioBufferSource.playbackRate (pitch will shift slightly with speed changes)');
+    return null;
+  })();
+  return _soundTouchLoadPromise;
+}
+
+// Stretch an AudioBuffer so its duration becomes ~targetDur, preserving pitch.
+// Default behaviour: compress-only (speed up) since TTS-overflow is the
+// common case in auto-fit flows. The editor opts in to bidirectional
+// stretching via opts.allowExpand so widening a clip actually slows it down.
+async function _voTimeStretchBuffer(audioBuf, targetDur, ctx, opts){
+  if(!audioBuf || audioBuf.duration <= 0 || targetDur <= 0) return audioBuf;
+  opts = opts || {};
+  const maxCompress = opts.maxCompress || 1.2;
+  const minExpand   = opts.allowExpand ? (opts.minExpand || 0.7) : 1.0;
+  const ratio = audioBuf.duration / targetDur; // >1 = need to compress; <1 = need to expand
+  if(Math.abs(ratio - 1) < 0.02) return audioBuf; // ~2% — not worth processing
+  // Compress-only mode: skip if we'd need to expand.
+  if(!opts.allowExpand && ratio < 1) return audioBuf;
+
+  const lib = await _loadSoundTouchOnce();
+  if(!lib) return audioBuf; // CDN unreachable — fall back to scheduler-only behavior
+
+  // Clamp tempo to the allowed range.
+  const tempo = Math.max(minExpand, Math.min(maxCompress, ratio));
+  try {
+    const sampleRate = audioBuf.sampleRate;
+    const source     = new lib.WebAudioBufferSource(audioBuf);
+    const st         = new lib.SoundTouch(sampleRate);
+    st.tempo = tempo;
+    const filter     = new lib.SimpleFilter(source, st);
+
+    const outLength  = Math.max(1, Math.floor(audioBuf.length / tempo));
+    const interleaved = new Float32Array(outLength * 2);
+
+    const CHUNK = 4096;
+    const temp  = new Float32Array(CHUNK * 2);
+    let written = 0;
+    while(written < outLength){
+      const want = Math.min(CHUNK, outLength - written);
+      const got  = filter.extract(temp, want);
+      if(got <= 0) break;
+      const copyLen = Math.min(got, outLength - written) * 2;
+      interleaved.set(temp.subarray(0, copyLen), written * 2);
+      written += got;
+    }
+
+    const channels = 2;
+    const out = ctx.createBuffer(channels, written, sampleRate);
+    const left  = out.getChannelData(0);
+    const right = out.getChannelData(1);
+    for(let i = 0; i < written; i++){
+      left[i]  = interleaved[i * 2];
+      right[i] = interleaved[i * 2 + 1];
+    }
+    return out;
+  } catch(e){
+    console.warn('[voTimeStretch] failed, using original buffer:', e);
+    return audioBuf;
+  }
+}
 let _voPreviewBlobsPerLang = {};  // { langCode: blobs[] } — one entry per completed language
 let _voActivePrevLang     = null;
 
@@ -49159,12 +50248,127 @@ function _voStopScheduledAudio(){
   if(_voPreviewCtx){ try{ _voPreviewCtx.suspend(); }catch(e){} }
 }
 
+// Compute non-overlapping schedule: each segment starts no earlier than its
+// segStart, but is delayed if the previous segment hasn't finished yet.
+// Returns the items array with `scheduledStart` (and, when manual timeline
+// edits exist for this language, `targetDuration`) populated.
+function _voPlanSchedule(items){
+  const GAP = 0.05; // 50ms gap between segments
+  const lang = _voActivePrevLang || st.tgt;
+  const edits = (st.voEdits && st.voEdits[lang]) || [];
+  console.log('[voPlan] lang=', lang, 'edits=', edits.length, 'voEdits keys=', Object.keys(st.voEdits||{}));
+  let prevEnd = 0;
+  items.forEach((item, i) => {
+    if(!item) return;
+    const edit = edits[i] || null;
+    if(edit && typeof edit.start === 'number'){
+      // User pinned a specific start time — honour it (still respecting any
+      // earlier segment's tail to avoid hard overlap).
+      const earliest = i > 0 ? prevEnd + GAP : 0;
+      item.scheduledStart = Math.max(edit.start, earliest);
+    } else {
+      const earliest = i > 0 ? prevEnd + GAP : 0;
+      item.scheduledStart = Math.max(item.segStart, earliest);
+    }
+    item.targetDuration = (edit && typeof edit.duration === 'number') ? edit.duration : null;
+    const playDur = item.targetDuration || item.buf.duration;
+    prevEnd = item.scheduledStart + playDur;
+  });
+  return items;
+}
+
+// Schedule whatever audio still needs to play, starting from the video's
+// current playback position. Called on every video `play` event so native
+// controls (replay, seek+play) re-trigger the VO.
+function _voScheduleFromCurrentTime(){
+  const ctx = _voPreviewCtx;
+  const vid = $('vo-preview-vid');
+  if(!ctx || !vid || !_voDecodedItems || !_voDecodedItems.length) return;
+
+  // Clear any sources still scheduled from a previous run
+  _voPreviewSrcs.forEach(s => { try{ s.stop(); }catch(e){} });
+  _voPreviewSrcs = [];
+
+  const ctxNow  = ctx.currentTime;
+  const vidTime = vid.currentTime;
+  const FADE    = 0.015;
+
+  for(const item of _voDecodedItems){
+    if(!item) continue;
+    const audioDur = item.buf.duration;
+    const start    = item.scheduledStart;
+    const end      = start + audioDur;
+    if(end <= vidTime) continue; // already past
+
+    let scheduleAt, bufOffset;
+    if(start < vidTime){
+      // We're mid-segment — start the buffer at the matching offset, now.
+      scheduleAt = ctxNow;
+      bufOffset  = vidTime - start;
+    } else {
+      scheduleAt = ctxNow + (start - vidTime);
+      bufOffset  = 0;
+    }
+    const remaining = audioDur - bufOffset;
+    if(remaining <= 0.01) continue;
+
+    const src  = ctx.createBufferSource();
+    src.buffer = item.buf;
+    const gain = ctx.createGain();
+    src.connect(gain).connect(ctx.destination);
+
+    // Tiny fade in/out to avoid clicks at segment boundaries
+    const fIn  = Math.min(FADE, remaining / 2);
+    gain.gain.setValueAtTime(0, scheduleAt);
+    gain.gain.linearRampToValueAtTime(1, scheduleAt + fIn);
+    if(remaining > FADE * 2){
+      gain.gain.setValueAtTime(1, scheduleAt + remaining - FADE);
+      gain.gain.linearRampToValueAtTime(0, scheduleAt + remaining);
+    }
+
+    src.start(scheduleAt, bufOffset);
+    _voPreviewSrcs.push(src);
+  }
+}
+
+function _voOnVideoPlay(){
+  const vid = $('vo-preview-vid');
+  if(!vid) return;
+  // Keep video muted — original audio must never come through during VO playback
+  if(!vid.muted) vid.muted = true;
+  if(_voPreviewCtx && _voPreviewCtx.state === 'suspended'){
+    _voPreviewCtx.resume().catch(()=>{});
+  }
+  _voScheduleFromCurrentTime();
+}
+
+function _voOnVideoPause(){
+  _voPreviewSrcs.forEach(s => { try{ s.stop(); }catch(e){} });
+  _voPreviewSrcs = [];
+}
+
+function _voOnVideoSeeked(){
+  const vid = $('vo-preview-vid');
+  if(vid && !vid.paused) _voOnVideoPlay();
+}
+
+function _voAttachVideoListeners(vid){
+  if(_voListenersAttached || !vid) return;
+  _voListenersAttached = true;
+  vid.addEventListener('play',    _voOnVideoPlay);
+  vid.addEventListener('pause',   _voOnVideoPause);
+  vid.addEventListener('seeking', _voOnVideoPause);
+  vid.addEventListener('seeked',  _voOnVideoSeeked);
+  vid.addEventListener('ended',   _voOnVideoPause);
+}
+
 async function _voPlayWithScheduledAudio(vid, blobs){
   try {
     // Stop any previously running context and sources
     _voPreviewSrcs.forEach(s => { try{ s.stop(); }catch(e){} });
     _voPreviewSrcs = [];
     if(_voPreviewCtx){ try{ _voPreviewCtx.close(); }catch(e){} }
+    _voDecodedItems = [];
 
     const ctx = new AudioContext();
     _voPreviewCtx = ctx;
@@ -49178,26 +50382,44 @@ async function _voPlayWithScheduledAudio(vid, blobs){
         const resp = await fetch(b.url);
         const arr  = await resp.arrayBuffer();
         const buf  = await ctx.decodeAudioData(arr);
-        return { buf, start: b.seg ? b.seg.start : 0, seg: b.seg };
+        return { buf, segStart: b.seg ? b.seg.start : 0, seg: b.seg };
       } catch(e){ return null; }
     }));
 
-    // Wait for video readiness then play
+    // Plan first so we know each item's target duration (which may come from
+    // the user's timeline edits rather than the original segment slot).
+    _voDecodedItems = _voPlanSchedule(items);
+
+    // Pitch-preserving time-stretch each segment to fit its target duration.
+    //   - Manual timeline edit (it.targetDuration set) → bidirectional stretch
+    //     so widening a clip really slows it AND narrowing speeds it up,
+    //     matching what the editor's own playback does.
+    //   - No manual edit → compress-only (auto-fit overshoots into slot;
+    //     short translations get natural delivery + trailing silence).
+    for(let i = 0; i < _voDecodedItems.length; i++){
+      const it = _voDecodedItems[i];
+      if(!it || !it.seg) continue;
+      const segDur   = (it.seg.end || 0) - (it.seg.start || 0);
+      const isManual = (typeof it.targetDuration === 'number' && it.targetDuration > 0);
+      const targetDur = isManual ? it.targetDuration : segDur;
+      const opts      = isManual ? { allowExpand:true, maxCompress:1.5, minExpand:0.6 } : undefined;
+      if(targetDur > 0){
+        it.buf = await _voTimeStretchBuffer(it.buf, targetDur, ctx, opts);
+      }
+    }
+
+    // Re-plan now that buffer durations may have changed (so any subsequent
+    // segments delayed by an overrun get updated start times).
+    _voDecodedItems = _voPlanSchedule(_voDecodedItems);
+
+    // Attach persistent play/pause/seek listeners (first time only) so that
+    // native controls — replay after end, scrub-and-play — re-trigger VO.
+    _voAttachVideoListeners(vid);
+
+    // Wait for video readiness then play. The `play` event handler will
+    // schedule audio relative to vid.currentTime (which is 0 here).
     await new Promise(res => { if(vid.readyState >= 2) res(); else vid.addEventListener('canplay', res, {once:true}); });
     vid.play();
-    const t0 = ctx.currentTime;
-    items.forEach(item => {
-      if(!item) return;
-      const src = ctx.createBufferSource();
-      src.buffer = item.buf;
-      src.connect(ctx.destination);
-      src.start(t0 + item.start);
-      _voPreviewSrcs.push(src);
-    });
-
-    // Sync audio context with video play/pause
-    vid.addEventListener('pause',  _voStopScheduledAudio, {once:true});
-    vid.addEventListener('ended',  _voStopScheduledAudio, {once:true});
   } catch(e){
     toast('Audio error: '+e.message, '#e53e3e', 4000);
     const vid2 = $('vo-preview-vid');
@@ -49278,23 +50500,64 @@ async function _muxWithMediaRecorder(videoSrc, wavBlob, statusEl) {
 }
 
 // ── render VO audio blobs → WAV blob using OfflineAudioContext ────────────────
+// Uses the same hybrid scheduling as live preview: each segment starts at its
+// segStart, but is delayed if the previous segment hasn't finished — so the
+// downloaded file matches what the user heard during preview (no overlap).
 async function _renderVoAudio(blobs){
-  const totalDuration = (st.segs && st.segs.length) ? (st.segs[st.segs.length-1].end + 2) : 60;
-  const sampleRate = 44100;
-  const offCtx = new OfflineAudioContext(2, Math.ceil(sampleRate * totalDuration), sampleRate);
-  await Promise.all(blobs.map(async b => {
-    if(!b || !b.url) return;
+  // Pass 1 — decode in a throwaway context to learn each segment's duration.
+  const tmpCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const items = await Promise.all(blobs.map(async b => {
+    if(!b || !b.url) return null;
     try {
       const resp = await fetch(b.url);
       const arr  = await resp.arrayBuffer();
-      const buf  = await offCtx.decodeAudioData(arr);
-      const src  = offCtx.createBufferSource();
-      src.buffer = buf;
-      const segStart = b.seg ? b.seg.start : 0;
-      src.connect(offCtx.destination);
-      src.start(segStart);
-    } catch(e){ console.warn('[voDownload] VO segment skipped:', e); }
+      const buf  = await tmpCtx.decodeAudioData(arr);
+      return { buf, segStart: b.seg ? b.seg.start : 0, seg: b.seg };
+    } catch(e){ console.warn('[voDownload] VO segment skipped:', e); return null; }
   }));
+
+  // Plan first so each item's targetDuration (from manual edits, if any)
+  // is available for time-stretch.
+  let planned = _voPlanSchedule(items);
+
+  // Pitch-preserving time-stretch each segment to fit its target duration.
+  // Same algorithm as preview — manual edits get bidirectional stretch so
+  // widening/narrowing in the editor is reflected in the downloaded file.
+  for(let i = 0; i < planned.length; i++){
+    const it = planned[i];
+    if(!it || !it.seg) continue;
+    const segDur   = (it.seg.end || 0) - (it.seg.start || 0);
+    const isManual = (typeof it.targetDuration === 'number' && it.targetDuration > 0);
+    const targetDur = isManual ? it.targetDuration : segDur;
+    const opts      = isManual ? { allowExpand:true, maxCompress:1.5, minExpand:0.6 } : undefined;
+    if(targetDur > 0){
+      it.buf = await _voTimeStretchBuffer(it.buf, targetDur, tmpCtx, opts);
+    }
+  }
+
+  // Re-plan now that buffer durations may have changed.
+  planned = _voPlanSchedule(planned);
+
+  try { tmpCtx.close(); } catch(e){}
+
+  // Total output length: whichever is later — the last scheduled segment's end,
+  // or the original timeline's end (so silence after the last line still plays).
+  let lastEnd = 0;
+  planned.forEach(it => { if(it) lastEnd = Math.max(lastEnd, it.scheduledStart + it.buf.duration); });
+  const segLast = (st.segs && st.segs.length) ? (st.segs[st.segs.length-1].end + 2) : 60;
+  const totalDuration = Math.max(lastEnd + 1, segLast);
+
+  const sampleRate = 44100;
+  const offCtx = new OfflineAudioContext(2, Math.ceil(sampleRate * totalDuration), sampleRate);
+
+  planned.forEach(it => {
+    if(!it) return;
+    const src = offCtx.createBufferSource();
+    src.buffer = it.buf;
+    src.connect(offCtx.destination);
+    src.start(it.scheduledStart);
+  });
+
   return _audioBufferToWav(await offCtx.startRendering());
 }
 
@@ -49339,6 +50602,769 @@ async function voDownloadVideoWithVO(){
     console.error('[voDownload]', e);
     _dlBtnReset();
   }
+}
+
+// ─── VO TIMELINE EDITOR ──────────────────────────────────────────────────────
+// Per-language manual edits to clip timing. When unset, clips use their
+// original seg.start and the TTS audio's natural duration.
+//   st.voEdits = { [langCode]: [ { start, duration } | null, ... ] }
+// Edits flow into _voPlayWithScheduledAudio and _renderVoAudio via the
+// edited-timing helpers below, so playback + downloads stay in sync.
+
+let _votLang = null;            // active language being edited
+let _votItems = [];             // [{ buf, segStart, segEnd, nativeDur, seg, idx }]
+let _votPxPerSec = 50;          // current zoom level
+let _votSelIdx = -1;            // currently selected clip index
+let _votDrag = null;            // active drag state
+let _votPlayCtx = null;         // AudioContext used for in-editor playback
+let _votPlaySrcs = [];          // BufferSources scheduled in the active playback
+let _votPlayStartCtxTime = 0;   // ctx.currentTime when playback began
+let _votPlayStartVidTime = 0;   // vid.currentTime when playback began
+let _votRafId = null;
+
+function _votGetEdits(lang){
+  if(!st.voEdits) st.voEdits = {};
+  if(!st.voEdits[lang]) st.voEdits[lang] = [];
+  return st.voEdits[lang];
+}
+
+function _votEdit(i){
+  const arr = _votGetEdits(_votLang);
+  return arr[i] || null;
+}
+
+function _votSetEdit(i, patch){
+  const arr = _votGetEdits(_votLang);
+  const cur = arr[i] || {};
+  arr[i] = { ...cur, ...patch };
+  console.log('[vot] setEdit lang=', _votLang, 'i=', i, '→', arr[i]);
+}
+
+// Returns the resolved {start, duration} for clip i, falling back to defaults
+// when no manual edit is recorded.
+function _votResolved(i){
+  const it = _votItems[i]; if(!it) return null;
+  const edit = _votEdit(i) || {};
+  const start    = (typeof edit.start    === 'number') ? edit.start    : it.segStart;
+  const duration = (typeof edit.duration === 'number') ? edit.duration : it.nativeDur;
+  return { start, duration };
+}
+
+function _votStretchRatio(i){
+  const r = _votResolved(i); const it = _votItems[i];
+  if(!r || !it || it.nativeDur <= 0) return 1;
+  return it.nativeDur / r.duration; // >1 = compressing audio (faster), <1 = expanding (slower)
+}
+
+// Map stretch ratio → CSS color band.
+function _votColorForRatio(r){
+  const dev = Math.abs(Math.log(r)); // symmetrical around 1.0
+  if(dev < 0.10) return '#22c55e'; // green — natural (≤ ~1.10× or ≥ ~0.91×)
+  if(dev < 0.18) return '#eab308'; // yellow — mild
+  if(dev < 0.30) return '#f97316'; // orange — rushed
+  return '#ef4444';                 // red — extreme
+}
+
+function _votFmtTime(s){
+  s = Math.max(0, s||0);
+  const m = Math.floor(s/60), sec = s - m*60;
+  return `${m}:${sec.toFixed(1).padStart(4,'0')}`;
+}
+
+function _votTimelineLength(){
+  // Long enough for ruler/track to fit the video + farthest scheduled clip end.
+  const vid = $('vot-video');
+  const vidDur = (vid && vid.duration && isFinite(vid.duration)) ? vid.duration : 0;
+  let lastEnd = 0;
+  for(let i = 0; i < _votItems.length; i++){
+    const r = _votResolved(i); if(!r) continue;
+    lastEnd = Math.max(lastEnd, r.start + r.duration);
+  }
+  return Math.max(vidDur, lastEnd, 30) + 2;
+}
+
+async function enterVoTimeline(langOverride){
+  // Tear down any in-flight VO preview playback so its Web Audio sources
+  // don't keep playing after we leave the preview screen.
+  _voStopScheduledAudio();
+  if(_voPreviewCtx){ try{ _voPreviewCtx.close(); }catch(e){} _voPreviewCtx = null; }
+  const prevVid = $('vo-preview-vid');
+  if(prevVid){ try{ prevVid.pause(); }catch(e){} prevVid.muted = true; }
+
+  // Tear down any leftover editor playback too (in case we're re-entering
+  // from a language tab click).
+  _votStopPlayback();
+  if(_votPlayCtx){ try{ _votPlayCtx.close(); }catch(e){} _votPlayCtx = null; }
+
+  // Pick the language: explicit param (from tab click) wins over the in-editor
+  // active lang, which wins over the preview screen's active lang.
+  const lang = langOverride || _votLang || _voActivePrevLang || (st.tgts && st.tgts[0]) || st.tgt || 'es';
+  _votLang = lang;
+  const blobs = _voPreviewBlobsPerLang[lang] || _voPreviewBlobs || [];
+  const hasReal = blobs.length && blobs[0] && blobs[0].url;
+  if(!hasReal){
+    toast('No VO audio for this language yet — generate it first', '#e53e3e', 4000);
+    return;
+  }
+
+  // Decode all blobs (or reuse already-decoded items if same lang). We need
+  // native (un-stretched) durations to compute stretch ratios as the user edits.
+  if(_votPlayCtx){ try{ _votPlayCtx.close(); }catch(e){} }
+  _votPlayCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const ctx = _votPlayCtx;
+  _votItems = await Promise.all(blobs.map(async (b, i) => {
+    if(!b || !b.url) return null;
+    try {
+      const resp = await fetch(b.url);
+      const arr  = await resp.arrayBuffer();
+      const buf  = await ctx.decodeAudioData(arr);
+      const seg  = b.seg || (st.segs && st.segs[i]) || {};
+      return {
+        buf,
+        seg,
+        idx: i,
+        segStart:  seg.start || 0,
+        segEnd:    seg.end   || 0,
+        nativeDur: buf.duration,
+      };
+    } catch(e){ console.warn('[votDecode] segment skipped:', e); return null; }
+  }));
+  _votItems = _votItems.filter(Boolean);
+
+  // Wire video source
+  const vid = $('vot-video');
+  const trVidSrc = $('video-el') && $('video-el').getAttribute('src');
+  const vidSrc = (st.file && st.isVideo) ? URL.createObjectURL(st.file) : (trVidSrc || st.demoVideoUrl || DEMO_VIDEO_URL);
+  if(vid && vidSrc && vid.getAttribute('src') !== vidSrc){
+    vid.src = vidSrc;
+    vid.load();
+  }
+  if(vid){ vid.muted = true; vid.currentTime = 0; vid.pause(); }
+
+  _votRenderLangTabs();
+  _votRender();
+  _votWireControls();
+  _votUpdateApplyBtn();
+
+  // Clear any defensive display:none we set when exiting before so the editor
+  // can re-open cleanly.
+  const editorEl = document.getElementById('vo-timeline-screen');
+  if(editorEl) editorEl.style.display = '';
+  show('vo-timeline-screen');
+  if(typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function _votRenderLangTabs(){
+  const tabsEl = $('vot-lang-tabs');
+  const divider = $('vot-lang-divider');
+  if(!tabsEl) return;
+  const tgts = (st.tgts && st.tgts.length) ? st.tgts.slice() : [];
+  if(tgts.length < 2){ tabsEl.style.display = 'none'; if(divider) divider.style.display='none'; return; }
+  const LN={en:'English',es:'Spanish',fr:'French',de:'German',pt:'Portuguese',it:'Italian',
+    ja:'Japanese',zh:'Chinese',ar:'Arabic',ko:'Korean',ptbr:'Pt (BR)',nl:'Dutch',
+    ru:'Russian',tr:'Turkish',vi:'Vietnamese',pl:'Polish',sv:'Swedish',he:'Hebrew',
+    id:'Indonesian',ms:'Malay'};
+  const approved = st.voApproved || {};
+  tabsEl.style.display = 'flex';
+  if(divider) divider.style.display='block';
+  tabsEl.innerHTML = tgts.filter(l => (_voPreviewBlobsPerLang[l]||[]).length).map(lang => {
+    const isActive = lang === _votLang;
+    const isDone   = !!approved[lang];
+    // Visual states: active (mint solid), approved-but-not-active (mint outline + ✓),
+    // unapproved-not-active (grey outline).
+    const accent = isActive ? 'var(--mint-500,#00d88e)' : (isDone ? 'rgba(0,216,142,0.6)' : 'rgba(255,255,255,0.14)');
+    const bg     = isActive ? 'var(--mint-500,#00d88e)' : (isDone ? 'rgba(0,216,142,0.12)' : 'rgba(255,255,255,0.04)');
+    const fg     = isActive ? '#050608' : (isDone ? 'var(--mint-500,#00d88e)' : 'rgba(255,255,255,0.7)');
+    const tick   = isDone ? '<i class="ph ph-check-circle" style="font-size:12px;margin-right:4px;"></i>' : '';
+    return `<button data-vot-lang="${lang}" style="
+      padding:5px 12px;border-radius:999px;font-size:11px;font-weight:700;cursor:pointer;
+      font-family:var(--font-sans);border:1px solid ${accent};
+      background:${bg};color:${fg};letter-spacing:0.04em;display:inline-flex;align-items:center;">
+      ${tick}${LN[lang]||lang.toUpperCase()}
+    </button>`;
+  }).join('');
+  tabsEl.querySelectorAll('button[data-vot-lang]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await enterVoTimeline(btn.dataset.votLang);
+    });
+  });
+}
+
+function _votRender(){
+  const ruler = $('vot-ruler');
+  const track = $('vot-track');
+  const canvas = $('vot-canvas');
+  if(!ruler || !track || !canvas) return;
+  const totalSec = _votTimelineLength();
+  const pxPerSec = _votPxPerSec;
+  const widthPx = Math.ceil(totalSec * pxPerSec);
+  canvas.style.width = widthPx + 'px';
+  $('vot-zoom-label').textContent = pxPerSec + ' px/s';
+
+  // Ruler ticks
+  const step = pxPerSec >= 80 ? 1 : pxPerSec >= 40 ? 2 : pxPerSec >= 20 ? 5 : 10;
+  let rulerHtml = '';
+  for(let s = 0; s <= totalSec; s += step){
+    const x = Math.round(s * pxPerSec);
+    rulerHtml += `<div style="position:absolute;left:${x}px;top:0;bottom:0;border-left:1px solid rgba(255,255,255,0.10);padding-left:4px;line-height:24px;white-space:nowrap;">${s}s</div>`;
+  }
+  ruler.innerHTML = rulerHtml;
+
+  // Clips
+  let trackHtml = '';
+  // Pull translations for the *currently active editor language* — not from
+  // seg.trans, which holds whichever lang was last loaded into st.segs.
+  const langTrans = (st.transPerLang && st.transPerLang[_votLang]) || [];
+  _votItems.forEach((it, i) => {
+    const r = _votResolved(i); if(!r) return;
+    const left  = Math.round(r.start * pxPerSec);
+    const width = Math.max(8, Math.round(r.duration * pxPerSec));
+    const ratio = _votStretchRatio(i);
+    const color = _votColorForRatio(ratio);
+    const isSel = i === _votSelIdx;
+    const label = langTrans[i] || (it.seg && (it.seg.tgt || it.seg.orig)) || `Segment ${i+1}`;
+    const warn  = Math.abs(Math.log(ratio)) >= 0.18;
+    trackHtml += `<div data-vot-clip="${i}" style="
+      position:absolute;left:${left}px;width:${width}px;top:0;bottom:0;
+      background:${color}; border-radius:6px;
+      box-shadow:${isSel?'0 0 0 2px #fff':'inset 0 0 0 1px rgba(0,0,0,0.25)'};
+      cursor:grab; overflow:hidden; opacity:${isSel?1:0.92};">
+      <div style="position:absolute;left:0;right:8px;top:0;bottom:18px;padding:5px 9px;font-size:11px;line-height:1.3;font-weight:600;color:rgba(0,0,0,0.85);overflow:hidden;font-family:var(--font-sans);pointer-events:none;word-break:break-word;">${esc(label)}</div>
+      <div style="position:absolute;left:6px;bottom:3px;font-size:9px;font-family:var(--font-mono);color:rgba(0,0,0,0.7);font-weight:700;pointer-events:none;letter-spacing:0.04em;">#${i+1} · ${ratio.toFixed(2)}×${warn?' ⚠':''}</div>
+      <div data-vot-handle="right" style="position:absolute;right:0;top:0;bottom:0;width:8px;cursor:ew-resize;background:rgba(0,0,0,0.18);"></div>
+    </div>`;
+  });
+  track.innerHTML = trackHtml;
+
+  // Wire interactions
+  track.querySelectorAll('[data-vot-clip]').forEach(el => {
+    const i = parseInt(el.dataset.votClip, 10);
+    el.addEventListener('pointerdown', ev => _votOnPointerDown(ev, i, ev.target.dataset.votHandle === 'right' ? 'resize' : 'move'));
+    el.addEventListener('contextmenu',  ev => { ev.preventDefault(); _votShowCtxMenu(ev, i); });
+    el.addEventListener('click', () => { _votSelIdx = i; _votRender(); _votUpdateSelectionInfo(); });
+  });
+
+  _votUpdateSelectionInfo();
+  _votUpdatePlayhead();
+}
+
+function _votUpdateSelectionInfo(){
+  const el = $('vot-selection-info'); if(!el) return;
+  if(_votSelIdx < 0 || !_votItems[_votSelIdx]){ el.textContent = ''; return; }
+  const i = _votSelIdx;
+  const it = _votItems[i];
+  const r  = _votResolved(i);
+  const ratio = _votStretchRatio(i);
+  const langTrans = (st.transPerLang && st.transPerLang[_votLang]) || [];
+  const text = langTrans[i] || (it.seg && (it.seg.tgt || it.seg.orig)) || '';
+  const edit = _votEdit(i);
+  const editMark = edit ? ' ✎' : '';
+  el.textContent = `#${i+1}${editMark}  ·  start ${r.start.toFixed(2)}s  ·  ${r.duration.toFixed(2)}s @ ${ratio.toFixed(2)}×  ·  "${text.slice(0,40)}${text.length>40?'…':''}"`;
+}
+
+function _votOnPointerDown(ev, i, mode){
+  ev.preventDefault();
+  ev.stopPropagation();
+  _votDrag = {
+    i, mode,
+    startX: ev.clientX,
+    orig:   _votResolved(i),
+    el:     ev.currentTarget, // the clip <div>
+  };
+  // Capture the pointer so move/up events keep firing on this element even
+  // if the cursor leaves its box.
+  try { ev.currentTarget.setPointerCapture(ev.pointerId); } catch(e){}
+  _votSelIdx = i;
+  // Light visual feedback (selection ring) without destroying the element
+  // we just captured.
+  ev.currentTarget.style.boxShadow = '0 0 0 2px #fff';
+  ev.currentTarget.style.opacity   = '1';
+  // Listeners on the captured element — they keep firing through the drag.
+  ev.currentTarget.addEventListener('pointermove', _votOnPointerMove);
+  ev.currentTarget.addEventListener('pointerup',   _votOnPointerUp, { once:true });
+  ev.currentTarget.addEventListener('pointercancel', _votOnPointerUp, { once:true });
+}
+
+function _votOnPointerMove(ev){
+  if(!_votDrag) return;
+  ev.preventDefault();
+  const dx = ev.clientX - _votDrag.startX;
+  const dSec = dx / _votPxPerSec;
+  const { i, mode, orig, el } = _votDrag;
+  if(mode === 'move'){
+    const newStart = Math.max(0, orig.start + dSec);
+    _votSetEdit(i, { start: newStart });
+  } else if(mode === 'resize'){
+    const newDur = Math.max(0.15, orig.duration + dSec);
+    _votSetEdit(i, { duration: newDur });
+  }
+  // Update *just this clip*'s DOM directly — full re-render would destroy
+  // the captured pointer target mid-drag.
+  if(el){
+    const r = _votResolved(i);
+    if(r){
+      const left  = Math.round(r.start * _votPxPerSec);
+      const width = Math.max(8, Math.round(r.duration * _votPxPerSec));
+      el.style.left  = left + 'px';
+      el.style.width = width + 'px';
+      el.style.background = _votColorForRatio(_votStretchRatio(i));
+      // Refresh the ratio label inside the clip without a full re-render.
+      const ratioEl = el.querySelector('div:nth-child(2)');
+      if(ratioEl){
+        const ratio = _votStretchRatio(i);
+        const warn  = Math.abs(Math.log(ratio)) >= 0.18;
+        ratioEl.textContent = `#${i+1} · ${ratio.toFixed(2)}×${warn?' ⚠':''}`;
+      }
+    }
+  }
+  _votUpdateSelectionInfo();
+}
+
+function _votOnPointerUp(ev){
+  const drag = _votDrag;
+  _votDrag = null;
+  if(drag && drag.el){
+    drag.el.removeEventListener('pointermove', _votOnPointerMove);
+    try { drag.el.releasePointerCapture(ev && ev.pointerId); } catch(e){}
+  }
+  // Now safe to do a full re-render (e.g. to redraw ruler if width changed
+  // beyond the timeline length).
+  _votRender();
+}
+
+// ── Context menu ─────────────────────────────────────────────────────────────
+function _votShowCtxMenu(ev, i){
+  const menu = $('vot-ctx-menu');
+  if(!menu) return;
+  _votSelIdx = i;
+  const ratio = _votStretchRatio(i);
+  const r = _votResolved(i);
+  const info = $('vot-ctx-info');
+  if(info) info.textContent = `#${i+1} · ${r.duration.toFixed(2)}s · ${ratio.toFixed(2)}×`;
+  menu.style.left = Math.min(ev.clientX, window.innerWidth - 240) + 'px';
+  menu.style.top  = Math.min(ev.clientY, window.innerHeight - 140) + 'px';
+  menu.style.display = 'block';
+  const close = () => { menu.style.display = 'none'; document.removeEventListener('click', close); };
+  setTimeout(() => document.addEventListener('click', close), 10);
+  menu.querySelectorAll('button[data-vot-action]').forEach(b => {
+    b.onclick = () => { _votOnCtxAction(b.dataset.votAction, i); close(); };
+  });
+  _votRender();
+}
+
+async function _votOnCtxAction(action, i){
+  if(action === 'reset-clip'){
+    const arr = _votGetEdits(_votLang);
+    arr[i] = null;
+    _votRender();
+    toast(`Segment ${i+1} timing reset`, 'success', 2000);
+    return;
+  }
+  if(action === 'tighten'){
+    await _votTightenLine(i);
+    return;
+  }
+}
+
+async function _votTightenLine(i){
+  const it = _votItems[i]; if(!it) return;
+  if(!getAnthropicKey()){
+    toast('Add an Opal C key in Settings to use Opal C tighten', '#ca8a04', 4000);
+    return;
+  }
+  const lang = _votLang;
+  const trans = (st.transPerLang && st.transPerLang[lang]) || [];
+  const currentText = trans[i] || it.seg.trans || it.seg.tgt || '';
+  const sourceText  = it.seg.orig || '';
+  if(!currentText){ toast('Nothing to tighten on this segment','#ca8a04',3000); return; }
+  toast('Asking Opal C for a shorter version…', 'info', 2500);
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{
+        'x-api-key': getAnthropicKey(),
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true',
+        'Content-Type':'application/json',
+      },
+      body: JSON.stringify({
+        model:'claude-haiku-4-5-20251001',
+        max_tokens:300,
+        system:'You are a professional voice-over translator. Rewrite the user-provided translated line so it speaks at least 25% faster while preserving meaning and tone. Return ONLY the rewritten translation, no commentary.',
+        messages:[{ role:'user', content:`Source (English): ${sourceText}\nCurrent translation (${lang}): ${currentText}\nRewrite shorter:` }],
+      }),
+    });
+    if(!r.ok){ const e = await r.json().catch(()=>({})); throw new Error(e.error?.message||`HTTP ${r.status}`); }
+    const data = await r.json();
+    const newText = (data.content && data.content[0] && data.content[0].text || '').trim().replace(/^["'`]|["'`]$/g,'');
+    if(!newText) throw new Error('Empty response');
+    // Persist new translation and re-synthesize
+    if(!st.transPerLang) st.transPerLang = {};
+    if(!st.transPerLang[lang]) st.transPerLang[lang] = [];
+    st.transPerLang[lang][i] = newText;
+    toast(`Re-synthesising segment ${i+1}…`, 'info', 2500);
+    await _votResynthesizeSegment(i, newText);
+    _votRender();
+    toast(`Segment ${i+1} tightened ✓`, 'success', 3000);
+  } catch(e){
+    toast('Tighten failed: '+e.message, '#e53e3e', 4500);
+  }
+}
+
+async function _votResynthesizeSegment(i, text){
+  const it = _votItems[i]; if(!it) return;
+  const elKey = getElKey();
+  if(!elKey) throw new Error('No ElevenLabs key set');
+  // Use the per-language configured voice (falls back to default).
+  const voiceCfg = (st.voicePerLang && st.voicePerLang[_votLang]) || {};
+  const voiceId  = voiceCfg.voice || voiceCfg.voiceId || getElVoiceId();
+  const body = {
+    text,
+    model_id: 'eleven_multilingual_v2',
+    voice_settings: { stability:0.5, similarity_boost:0.8, style:0, use_speaker_boost:true },
+  };
+  const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+    method:'POST',
+    headers:{ 'xi-api-key': elKey, 'Content-Type':'application/json' },
+    body: JSON.stringify(body),
+  });
+  if(!r.ok){ const e = await r.json().catch(()=>({})); throw new Error(e.detail?.message||`HTTP ${r.status}`); }
+  const blob = await r.blob();
+  const url  = URL.createObjectURL(blob);
+  const arr  = await blob.arrayBuffer();
+  const buf  = await _votPlayCtx.decodeAudioData(arr);
+  // Update the in-editor item
+  it.buf = buf;
+  it.nativeDur = buf.duration;
+  // Update the preview blobs so playback after closing the editor uses the new audio.
+  const blobs = _voPreviewBlobsPerLang[_votLang] || [];
+  if(blobs[i]){
+    try { URL.revokeObjectURL(blobs[i].url); } catch(e){}
+    blobs[i] = { ...blobs[i], blob, url };
+  }
+  // If the user has no manual duration override yet, clear any old start
+  // override so the new clip lands where its original timing wants it.
+  const arrEdits = _votGetEdits(_votLang);
+  if(arrEdits[i] && typeof arrEdits[i].duration !== 'number'){
+    // keep manual start if present
+  }
+}
+
+// ── Playback ─────────────────────────────────────────────────────────────────
+function _votStopPlayback(){
+  _votPlaySrcs.forEach(s => { try{ s.stop(); }catch(e){} });
+  _votPlaySrcs = [];
+  const vid = $('vot-video'); if(vid){ vid.pause(); }
+  if(_votRafId){ cancelAnimationFrame(_votRafId); _votRafId = null; }
+  const btn = $('vot-play-btn'); if(btn) btn.innerHTML = '<i class="ph-fill ph-play"></i>';
+}
+
+async function _votStartPlayback(){
+  const vid = $('vot-video'); if(!vid) return;
+  // Stop only the audio sources from any prior play — don't pause the video
+  // (the click handler already kicked it off; pausing then re-playing causes
+  // browsers to drop the second play() in a rapid sequence).
+  _votPlaySrcs.forEach(s => { try{ s.stop(); }catch(e){} });
+  _votPlaySrcs = [];
+  if(_votRafId){ cancelAnimationFrame(_votRafId); _votRafId = null; }
+  const ctx = _votPlayCtx;
+  if(!ctx){
+    console.warn('[vot] No AudioContext — cannot play');
+    return;
+  }
+  if(ctx.state === 'suspended') await ctx.resume().catch(()=>{});
+
+  const vidTime = vid.currentTime || 0;
+  const ctxStart = ctx.currentTime + 0.08;
+  _votPlayStartCtxTime = ctxStart;
+  _votPlayStartVidTime = vidTime;
+
+  const editsForLang = (st.voEdits && st.voEdits[_votLang]) || [];
+  console.log('[vot] play lang=', _votLang, 'items=', _votItems.length, 'edits=', editsForLang.length, 'vidTime=', vidTime);
+
+  // Schedule each item using its resolved timing, time-stretched if needed.
+  for(let i = 0; i < _votItems.length; i++){
+    const it = _votItems[i];
+    const r  = _votResolved(i);
+    if(!it || !r) continue;
+    const end = r.start + r.duration;
+    if(end <= vidTime) continue;
+
+    // Decide whether/how to change speed:
+    //   - First try SoundTouch pitch-preserving stretch (best quality).
+    //   - If SoundTouch is unavailable (CDN unreachable), fall back to
+    //     AudioBufferSourceNode.playbackRate which shifts pitch slightly
+    //     but ALWAYS works and gives audible feedback.
+    let bufToPlay  = it.buf;
+    let playbackRate = 1.0;
+    const ratio = it.nativeDur / r.duration; // >1 = need to speed up
+    if(Math.abs(ratio - 1) >= 0.02){
+      try {
+        const stretched = await _voTimeStretchBuffer(it.buf, r.duration, ctx, { allowExpand:true, maxCompress:1.5, minExpand:0.6 });
+        if(stretched && stretched !== it.buf){
+          bufToPlay = stretched;
+        } else {
+          // SoundTouch unavailable or skipped — fall back to playbackRate.
+          playbackRate = Math.max(0.6, Math.min(1.5, ratio));
+        }
+      } catch(e){
+        console.warn('[vot] stretch failed for clip', i, e);
+        playbackRate = Math.max(0.6, Math.min(1.5, ratio));
+      }
+    }
+
+    let when, offset;
+    const effectivePlayDur = (playbackRate !== 1.0) ? (bufToPlay.duration / playbackRate) : bufToPlay.duration;
+    if(r.start < vidTime){
+      when = ctxStart;
+      offset = (vidTime - r.start) * (bufToPlay.duration / effectivePlayDur);
+    } else {
+      when = ctxStart + (r.start - vidTime);
+      offset = 0;
+    }
+    console.log('[vot]', `clip ${i}: r.start=${r.start.toFixed(2)} r.dur=${r.duration.toFixed(2)} native=${it.nativeDur.toFixed(2)} when=+${(when-ctxStart).toFixed(2)}s offset=${offset.toFixed(2)} bufDur=${bufToPlay.duration.toFixed(2)} playbackRate=${playbackRate.toFixed(2)}`);
+    const src = ctx.createBufferSource();
+    src.buffer = bufToPlay;
+    if(playbackRate !== 1.0) src.playbackRate.value = playbackRate;
+    src.connect(ctx.destination);
+    src.start(when, Math.max(0, offset));
+    _votPlaySrcs.push(src);
+  }
+
+  if(!_votPlaySrcs.length){
+    console.warn('[vot] Nothing scheduled — _votItems is empty or all clips are before vidTime');
+    toast('Nothing to play — try seeking to the start', '#ca8a04', 3000);
+  }
+
+  // NOTE: do NOT call vid.play() here — the click handler already did it
+  // synchronously in the user gesture. Calling it again after our awaits
+  // is unreliable and can race against the earlier play.
+  const btn = $('vot-play-btn'); if(btn) btn.innerHTML = '<i class="ph-fill ph-pause"></i>';
+
+  const tick = () => {
+    _votUpdatePlayhead();
+    if(!vid.paused && !vid.ended) _votRafId = requestAnimationFrame(tick);
+  };
+  _votRafId = requestAnimationFrame(tick);
+  vid.addEventListener('pause', _votStopPlayback, { once:true });
+  vid.addEventListener('ended', _votStopPlayback, { once:true });
+}
+
+function _votUpdatePlayhead(){
+  const vid = $('vot-video'); if(!vid) return;
+  const t = vid.currentTime || 0;
+  const x = t * _votPxPerSec;
+  const head = $('vot-playhead');
+  // Use transform (compositor-only, no layout reflow) for smoother motion.
+  if(head) head.style.transform = `translateX(${x}px)`;
+  const lbl = $('vot-playhead-label');
+  if(lbl) lbl.textContent = _votFmtTime(t);
+  const td  = $('vot-time-display');
+  if(td) td.textContent = `${_votFmtTime(t)} / ${_votFmtTime(vid.duration||0)}`;
+}
+
+// Drag the playhead knob to scrub the video.
+let _votPlayheadDrag = null;
+function _votWirePlayheadDrag(){
+  const head = $('vot-playhead');
+  if(!head || head.dataset.wired === '1') return;
+  head.dataset.wired = '1';
+  head.addEventListener('pointerdown', ev => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    _votPlayheadDrag = { startX: ev.clientX, startT: ($('vot-video')?.currentTime || 0) };
+    try { head.setPointerCapture(ev.pointerId); } catch(e){}
+    head.addEventListener('pointermove', _votOnPlayheadMove);
+    head.addEventListener('pointerup',   _votOnPlayheadUp, { once:true });
+    head.addEventListener('pointercancel', _votOnPlayheadUp, { once:true });
+  });
+}
+function _votOnPlayheadMove(ev){
+  if(!_votPlayheadDrag) return;
+  ev.preventDefault();
+  const dx = ev.clientX - _votPlayheadDrag.startX;
+  const dT = dx / _votPxPerSec;
+  const vid = $('vot-video');
+  if(!vid) return;
+  const newT = Math.max(0, Math.min(vid.duration || 0, _votPlayheadDrag.startT + dT));
+  vid.currentTime = newT;
+  _votUpdatePlayhead();
+}
+function _votOnPlayheadUp(){
+  const head = $('vot-playhead');
+  if(head) head.removeEventListener('pointermove', _votOnPlayheadMove);
+  _votPlayheadDrag = null;
+}
+
+// ── Controls + lifecycle ────────────────────────────────────────────────────
+let _votControlsWired = false;
+function _votWireControls(){
+  if(_votControlsWired) return;
+  _votControlsWired = true;
+
+  $('vot-close-btn').addEventListener('click', () => { _votStopPlayback(); _votExit(); });
+  $('vot-apply-btn').addEventListener('click', () => { _votStopPlayback(); _votApplyAndExit(); });
+  $('vot-reset-btn').addEventListener('click', () => {
+    if(!st.voEdits) st.voEdits = {};
+    st.voEdits[_votLang] = [];
+    _votRender();
+    toast('All edits reset to original timing', 'success', 2500);
+  });
+  // Fixed zoom steps keep px/s values clean (no fractional drift from
+  // repeated 1.5× multiplications).
+  const _VOT_ZOOM_STEPS = [15, 20, 30, 50, 75, 100, 150, 200];
+  const _votZoomStep = (dir) => {
+    let idx = _VOT_ZOOM_STEPS.indexOf(_votPxPerSec);
+    if(idx === -1){
+      // Snap to closest step when starting from an off-grid value.
+      let best = 0, bestDiff = Infinity;
+      _VOT_ZOOM_STEPS.forEach((v,k) => { const d = Math.abs(v - _votPxPerSec); if(d < bestDiff){ bestDiff = d; best = k; } });
+      idx = best;
+    }
+    idx = Math.max(0, Math.min(_VOT_ZOOM_STEPS.length - 1, idx + dir));
+    _votPxPerSec = _VOT_ZOOM_STEPS[idx];
+    _votRender();
+  };
+  $('vot-zoom-in').addEventListener('click',  () => _votZoomStep(+1));
+  $('vot-zoom-out').addEventListener('click', () => _votZoomStep(-1));
+  $('vot-play-btn').addEventListener('click', async (ev) => {
+    ev.preventDefault();
+    const vid = $('vot-video');
+    if(!vid) return;
+    if(_votPlaySrcs.length){ _votStopPlayback(); return; }
+    // Resume the AudioContext synchronously within this gesture — must
+    // happen BEFORE any awaits in _votStartPlayback or the browser will
+    // block autoplay and the first click silently fails.
+    if(_votPlayCtx && _votPlayCtx.state !== 'running'){
+      try { await _votPlayCtx.resume(); } catch(e){ console.warn('[vot] ctx.resume failed', e); }
+    }
+    // Kick the video off in the same gesture too.
+    vid.play().catch(e => console.warn('[vot] vid.play() rejected:', e));
+    _votStartPlayback();
+  });
+
+  // Click on ruler/track scrubs the video.
+  $('vot-canvas').addEventListener('click', ev => {
+    if(ev.target.closest('[data-vot-clip]')) return; // clip clicks handled separately
+    const rect = $('vot-canvas').getBoundingClientRect();
+    const x = ev.clientX - rect.left;
+    const t = Math.max(0, x / _votPxPerSec);
+    const vid = $('vot-video');
+    if(vid && isFinite(vid.duration)){
+      vid.currentTime = Math.min(vid.duration, t);
+      _votUpdatePlayhead();
+    }
+  });
+
+  // Update playhead while scrubbing video natively too.
+  const vid = $('vot-video');
+  if(vid) vid.addEventListener('timeupdate', _votUpdatePlayhead);
+
+  // Make the playhead knob draggable for scrubbing.
+  _votWirePlayheadDrag();
+}
+
+function _votExit(){
+  _voStopScheduledAudio();
+  if(_voPreviewCtx){ try{ _voPreviewCtx.close(); }catch(e){} _voPreviewCtx = null; }
+  _voDecodedItems = [];
+  const prevVid = $('vo-preview-vid');
+  if(prevVid){ try{ prevVid.pause(); }catch(e){} prevVid.currentTime = 0; prevVid.controls = false; prevVid.muted = true; }
+  const overlay = $('vo-preview-overlay');
+  if(overlay){
+    if(typeof _restoreVoOverlay === 'function') _restoreVoOverlay();
+    overlay.style.display = 'flex';
+  }
+  // Defensive: force-hide the editor before navigating. show() *should*
+  // already remove .active, but some CSS combination is letting the editor
+  // remain visible, so we belt-and-braces it here.
+  const editor = document.getElementById('vo-timeline-screen');
+  if(editor){
+    editor.classList.remove('active');
+    editor.style.display = 'none';
+  }
+  show('synthvo-screen');
+  window.scrollTo(0, 0);
+}
+
+// Compute the primary-button action for the current editor state. Multi-lang
+// flows must approve every language before delivery is unlocked.
+function _votPrimaryAction(){
+  const tgts = (st.tgts && st.tgts.length)
+    ? st.tgts.filter(l => (_voPreviewBlobsPerLang[l]||[]).length)
+    : [_votLang];
+  const approved = st.voApproved || {};
+  if(!approved[_votLang]){
+    return { kind:'approve', lang:_votLang, remainingAfter: tgts.filter(l => l !== _votLang && !approved[l]).length };
+  }
+  // Current lang already approved — look for next unapproved.
+  const next = tgts.find(l => !approved[l]);
+  if(next) return { kind:'switch', lang:next };
+  // Everything approved → deliver.
+  return { kind:'deliver' };
+}
+
+function _votUpdateApplyBtn(){
+  const btn = $('vot-apply-btn');
+  if(!btn) return;
+  const act = _votPrimaryAction();
+  const code = (act.lang || '').toUpperCase();
+  if(act.kind === 'approve'){
+    btn.innerHTML = act.remainingAfter > 0
+      ? `Approve ${code} &amp; continue →`
+      : `Approve ${code} →`;
+  } else if(act.kind === 'switch'){
+    btn.innerHTML = `Switch to ${code} →`;
+  } else {
+    btn.innerHTML = `Done — Deliver →`;
+  }
+}
+
+function _votApplyAndExit(){
+  // Multi-lang gating: approve the active language first, then either switch
+  // to the next unapproved language or, if all are done, exit to delivery.
+  if(!st.voApproved) st.voApproved = {};
+  const act = _votPrimaryAction();
+
+  if(act.kind === 'approve'){
+    st.voApproved[act.lang] = true;
+    toast(`${(act.lang||'').toUpperCase()} approved ✓`, 'success', 2200);
+    // Find the next unapproved (re-evaluated since we just flipped one).
+    const nextAct = _votPrimaryAction();
+    if(nextAct.kind === 'switch'){
+      // Switch to the next unapproved language — stay in the editor.
+      _votStopPlayback();
+      enterVoTimeline(nextAct.lang);
+    } else {
+      // Everything approved now — go to delivery.
+      _votFinishToDelivery();
+    }
+    return;
+  }
+  if(act.kind === 'switch'){
+    _votStopPlayback();
+    enterVoTimeline(act.lang);
+    return;
+  }
+  // 'deliver' — everything approved already.
+  _votFinishToDelivery();
+}
+
+function _votFinishToDelivery(){
+  // Persist completion to the job record so the dashboard reflects reality.
+  if(st.jobId){
+    try {
+      const tgts = (st.tgts && st.tgts.length) ? st.tgts.slice() : [_votLang || st.tgt || 'es'];
+      updateJob(st.jobId, {
+        status: 'delivered',
+        completedAt: new Date().toISOString(),
+        completedMode: (st.smartMode === 'both') ? 'captions+vo' : 'vo',
+        completedLangs: tgts,
+      });
+    } catch(e){ console.warn('[jobComplete]', e); }
+  }
+  toast('All voice-overs approved — opening delivery', 'success', 3200);
+  _votExit();
 }
 
 async function voDownloadAllLanguages(){
@@ -50103,16 +52129,57 @@ function initVoEngineScreen(){
       // Low / Medium → show video preview with "Your VO is being created" overlay
       _showVoCreatingState();
 
-      const voiceId = elVoiceSelection.voiceId || getElVoiceId();
-      const _ttsLang = _svActiveLang || st.tgt;
-      runElTTSSegments(elKey, voiceId, quality, _ttsLang).then(blobs => {
-        showAssetsReceived(blobs);
-      }).catch(e=>{
-        toast('TTS failed: '+e.message,'#e53e3e',6000);
-        $('vo-state-received').style.display='none';
-        $('vo-state-ready').style.display='';
-        _restoreVoOverlay();
-      });
+      // Collect every target language the user picked, not just the active one.
+      const tgts = (st.tgts && st.tgts.length) ? st.tgts.slice() : [_svActiveLang || st.tgt || 'es'];
+
+      const _updateOverlayProgress = (lang, idx) => {
+        const overlay = $('vo-preview-overlay');
+        if(!overlay) return;
+        const LN={en:'English',es:'Spanish',fr:'French',de:'German',pt:'Portuguese',it:'Italian',
+          ja:'Japanese',zh:'Chinese',ar:'Arabic',ko:'Korean',ptbr:'Pt (BR)',nl:'Dutch',
+          ru:'Russian',tr:'Turkish',vi:'Vietnamese',pl:'Polish',sv:'Swedish',he:'Hebrew',
+          id:'Indonesian',ms:'Malay'};
+        const name = LN[lang] || (lang||'').toUpperCase();
+        const sub  = tgts.length > 1
+          ? `Synthesising ${name} (${idx+1} of ${tgts.length}) — ${(st.segs||[]).length} segments…`
+          : `Synthesising ${(st.segs||[]).length} segments…`;
+        overlay.innerHTML = `
+          <div style="width:64px;height:64px;border-radius:50%;border:3px solid rgba(255,255,255,0.12);border-top-color:var(--mint-500,#00d88e);animation:spin 0.9s linear infinite;"></div>
+          <div style="font-size:18px;font-weight:700;color:#fff;letter-spacing:-0.01em;margin-top:4px;">Your VO is being created</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.5);font-family:var(--font-mono);letter-spacing:0.06em;">${sub}</div>`;
+      };
+
+      (async () => {
+        try {
+          for(let i = 0; i < tgts.length; i++){
+            const lang = tgts[i];
+            // Pick this language's configured voice — fall back to the active
+            // selection only if nothing was saved for this lang.
+            const voiceCfg = (st.voicePerLang && st.voicePerLang[lang]) || {};
+            const voiceId  = voiceCfg.voice || voiceCfg.voiceId || elVoiceSelection.voiceId || getElVoiceId();
+            _updateOverlayProgress(lang, i);
+            const blobs = await runElTTSSegments(elKey, voiceId, quality, lang);
+            _voPreviewBlobsPerLang[lang] = blobs;
+          }
+          // Show preview with the first target language active. We still
+          // call showAssetsReceived so the delivery screen state (downloads,
+          // tabs, etc.) is populated — but then immediately route to the
+          // timeline editor, which is now the primary review/QA surface.
+          // Delivery only unlocks after every language is approved there.
+          _svActiveLang     = tgts[0];
+          _voActivePrevLang = tgts[0];
+          _voPreviewBlobs   = _voPreviewBlobsPerLang[tgts[0]] || [];
+          if(!st.voApproved) st.voApproved = {};
+          showAssetsReceived(_voPreviewBlobs);
+          // Hop straight into the editor for the first language.
+          setTimeout(() => enterVoTimeline(tgts[0]), 200);
+        } catch(e){
+          toast('TTS failed: '+e.message,'#e53e3e',6000);
+          $('vo-state-received').style.display='none';
+          $('vo-state-ready').style.display='';
+          _restoreVoOverlay();
+        }
+      })();
     }
   }
 
@@ -50211,11 +52278,25 @@ function initVoEngineScreen(){
       $('vo-assets-section').style.display = 'none';
       $('vo-smart-preview').style.display  = '';
 
-      // Update page heading
+      // Update page heading — this screen is the final delivery step now
+      // (review happens in the timeline editor), so frame it accordingly.
       const h1 = $('svn-main-h1');
-      if(h1) h1.innerHTML = 'Preview your <span class="svn-accent">voice-over.</span>';
+      if(h1) h1.innerHTML = 'Your <span class="svn-accent">voice-over</span> is ready.';
       const lede = $('svn-main-lede');
-      if(lede) lede.textContent = 'Play the dubbed video to review the voice-over, then download or deliver to client.';
+      if(lede) lede.textContent = 'Play to review, then download each language. Re-edit timing or translations any time.';
+      // Hide the dock back button — the only escape hatch we want from here
+      // is the "Re-edit timeline" pill next to the play preview controls.
+      const svBack = $('sv-back');
+      if(svBack) svBack.style.display = 'none';
+      // Surface the "Re-edit translations" pill only when captions are part
+      // of the deliverable (smart captions, smart both, or any tier where
+      // st.transPerLang has been populated).
+      const reEditTrBtn = $('vo-edit-translations-btn');
+      if(reEditTrBtn){
+        const mode = st.smartMode || 'captions';
+        const hasCaptions = (mode === 'captions' || mode === 'both') && st.transPerLang && Object.keys(st.transPerLang).length;
+        reEditTrBtn.style.display = hasCaptions ? 'inline-flex' : 'none';
+      }
 
       // Language tabs (shown when multiple languages are present)
       const tgts = (st.tgts && st.tgts.length) ? st.tgts : [st.tgt||'es'];
@@ -50430,10 +52511,14 @@ async function runElTTSSegments(apiKey, voiceId, quality, lang){
         const audioDur = decoded.duration;
 
         if(audioDur > segDur * 1.05){
-          // Re-request at higher speed to fit the slot, max 1.3× (beyond that sounds unnatural)
-          const speed = Math.min(1.3, audioDur / segDur);
-          if(titleEl) titleEl.textContent = `Adjusting pace… ${i+1} / ${segs.length}`;
-          blob = await fetchTTS(text, speed);
+          // Gentle pace nudge only — beyond ~1.15× sounds rushed. If still over slot
+          // after this, playback scheduler will delay the next segment instead of
+          // cramming, which preserves natural delivery at the cost of slight drift.
+          const speed = Math.min(1.15, audioDur / segDur);
+          if(speed > 1.02){
+            if(titleEl) titleEl.textContent = `Adjusting pace… ${i+1} / ${segs.length}`;
+            blob = await fetchTTS(text, speed);
+          }
         }
       }
 
