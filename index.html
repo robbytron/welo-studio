@@ -42311,7 +42311,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         <div style="font-family:var(--font-sans);font-size:13px;color:var(--text-3,#7e848d);line-height:1.5;">
           <strong style="color:var(--text-1,#050608);font-weight:700;">All done?</strong> You can come back to this project any time from your projects dashboard.
         </div>
-        <button onclick="openDashboard()" style="padding:11px 22px;background:var(--mint-500,#00d88e);color:var(--ink,#050608);border:none;border-radius:10px;font-family:var(--font-sans);font-size:13px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:8px;letter-spacing:-0.01em;">
+        <button onclick="voFinishAndExit()" style="padding:11px 22px;background:var(--mint-500,#00d88e);color:var(--ink,#050608);border:none;border-radius:10px;font-family:var(--font-sans);font-size:13px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:8px;letter-spacing:-0.01em;">
           <i class="ph ph-check" style="font-size:14px"></i> Finish &amp; back to projects
         </button>
       </div>
@@ -42958,22 +42958,33 @@ function showScreen(id) {
   if(login) login.classList.remove('active');
 }
 
-// show — studio screen switcher: manages body.studio-mode + stepper visibility
+// show — universal screen switcher. Detects whether the target is a client
+// portal screen (inside #cp-screens) or a studio screen, and toggles
+// body.studio-mode accordingly. Without this, calling show() with a
+// cp-screen target left the body in studio-mode which can leave the
+// client-portal layout broken.
 function show(id) {
-  // Hide all studio screens (not inside #cp-screens)
-  document.querySelectorAll('.screen').forEach(s => {
-    if (!s.closest('#cp-screens')) s.classList.remove('active');
-  });
   const el = document.getElementById(id);
-  if (el) el.classList.add('active');
-  document.body.classList.add('studio-mode');
+  if (!el) return;
+  const isCpTarget = !!el.closest('#cp-screens');
+
+  // Deactivate every other .screen so only the target ends up visible.
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  el.classList.add('active');
+
+  // Toggle studio-mode based on target context.
+  if(isCpTarget) document.body.classList.remove('studio-mode');
+  else           document.body.classList.add('studio-mode');
+
   const login = document.getElementById('unified-login');
   if(login) login.classList.remove('active');
-  // Manage stepper visibility
+
+  // Manage stepper visibility (only relevant for studio screens; cp-screens
+  // don't use it).
   const stepperEl = document.getElementById('stepper');
   if (stepperEl) {
     const noStep = new Set(['backend-login-screen','job-queue-screen','studio-dash-screen','upload-screen','transcript-screen','processing-screen','synthvo-screen','opal-screen','success-screen','translation-review-screen']);
-    stepperEl.style.display = noStep.has(id) ? 'none' : '';
+    stepperEl.style.display = (isCpTarget || noStep.has(id)) ? 'none' : '';
   }
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
@@ -45659,17 +45670,17 @@ function enterTranslationReview(){
   _trvSetShare(false);
 
   show('translation-review-screen');
-  // Show role-appropriate footer button.
-  //   - MM Producer (agency side only): "Send to Linguist"
-  //   - Linguist: "Send back to Producer"
-  //   - Client flow / QA / no-role: neither (just Approve & Continue) —
-  //     "Send to Linguist" must not appear on the client side because the
-  //     client has no linguist queue to route to.
-  const role     = (typeof bkState !== 'undefined' && bkState && bkState.role) || null;
+  // Show role-appropriate footer button. The hand-off buttons only make
+  // sense for AGENCY-side workflows on standard tiers. Smart / client-flow
+  // projects are fully self-serve, so neither button should appear there
+  // regardless of any lingering bkState.role from a previous agency session.
+  const role         = (typeof bkState !== 'undefined' && bkState && bkState.role) || null;
+  const isClientFlow = (st.tier === 'smart' || st.selfService === true ||
+                        document.body.classList.contains('studio-mode') === false);
   const toLing   = $('trv-send-linguist-btn');
   const toProd   = $('trv-send-producer-btn');
-  if(toLing) toLing.style.display = (role === 'mm')        ? 'inline-flex' : 'none';
-  if(toProd) toProd.style.display = (role === 'linguist')  ? 'inline-flex' : 'none';
+  if(toLing) toLing.style.display = (!isClientFlow && role === 'mm')        ? 'inline-flex' : 'none';
+  if(toProd) toProd.style.display = (!isClientFlow && role === 'linguist')  ? 'inline-flex' : 'none';
   if(typeof lucide !== 'undefined') lucide.createIcons();
 }
 
@@ -47821,7 +47832,7 @@ function openJobFromQueue(id){
 // Re-open a completed job at the appropriate "finished" surface so users can
 // re-download deliverables or jump back into editing. Detects what the job
 // produced (captions / VO / both) from j.completedMode and routes accordingly.
-function _reopenDeliveredJob(j){
+async function _reopenDeliveredJob(j){
   const mode = j.completedMode || (j.smartMode === 'captions' ? 'captions' : (j.smartMode === 'synth-vo' ? 'vo' : 'vo'));
   const tgts = (j.completedLangs && j.completedLangs.length) ? j.completedLangs : (j.tgtLangs || ['es']);
   st.wfStep = 3;
@@ -47829,17 +47840,26 @@ function _reopenDeliveredJob(j){
   if(mode === 'captions'){
     // Captions-only completion → success screen with re-download cards.
     toast(`Re-opening ${j.projectName} · captions delivered`, 'info', 4000);
-    // The downloadSRT() helper reads from st.transPerLang, which may not be
-    // restored mid-session reload; if so, downloads will fall back to the
-    // source segments. For an in-session re-open everything still works.
     showCaptionsFinishedScreen(tgts);
     return;
   }
 
-  // VO or captions+VO completion → land on the delivery screen so they can
-  // re-download or re-edit. If TTS blobs are still in memory, the play
-  // preview and downloads work; if not, the user needs to re-generate.
-  const hasBlobs = tgts.some(l => (_voPreviewBlobsPerLang[l]||[]).length);
+  // VO or captions+VO completion → try IndexedDB first to hydrate blobs
+  // from a previous session, fall back to in-memory cache, and only if
+  // both are empty do we route the user to VO setup to regenerate.
+  let hasBlobs = tgts.some(l => (_voPreviewBlobsPerLang[l]||[]).length);
+  if(!hasBlobs && j.id){
+    try {
+      const restored = await _voLoadAllForJob(j.id, tgts);
+      const langsRestored = Object.keys(restored);
+      if(langsRestored.length){
+        langsRestored.forEach(l => { _voPreviewBlobsPerLang[l] = restored[l]; });
+        hasBlobs = true;
+        toast(`Restored ${langsRestored.length} language${langsRestored.length>1?'s':''} from local cache`, 'success', 3500);
+      }
+    } catch(e){ console.warn('[reopen] IDB hydrate failed:', e); }
+  }
+
   if(hasBlobs){
     _voActivePrevLang = tgts[0];
     _svActiveLang = tgts[0];
@@ -47847,8 +47867,7 @@ function _reopenDeliveredJob(j){
     showAssetsReceived(_voPreviewBlobs);
     toast(`Re-opened ${j.projectName} · ready to re-download or re-edit`, 'success', 4000);
   } else {
-    // No blobs in memory (likely a page reload) — fall back to running the
-    // VO setup screen so the user can re-generate.
+    // No blobs anywhere — page was reloaded AND IDB cache is empty/lost.
     toast(`Re-opening ${j.projectName} · re-generate voice-over to access downloads`, 'info', 5000);
     enterSV();
   }
@@ -48775,9 +48794,13 @@ function enterTranscript(){
     enterSmartAutoTranslate();
     return;
   }
-  // Preserve step 3 if translations already exist (returning from OPAL screen)
-  const hasTranslations = st.segs && st.segs.some(s => s.trans);
-  st.wfStep = hasTranslations ? 3 : 1;
+  // Preserve wfStep if it's already explicitly set to 3 (translated review path).
+  // Otherwise it gets reset to 1 when translations are empty strings (silent
+  // translate failure), causing tr-opal to loop back to translation review.
+  if(st.wfStep !== 3){
+    const hasTranslations = st.segs && st.segs.some(s => s.trans);
+    st.wfStep = hasTranslations ? 3 : 1;
+  }
   if(!st._stepperTotal) buildStepper(st.tier||'smart'); // ensure stepper is built
   const vidEl=$('video-el'), audEl=$('audio-el'), mockEl=$('tr-video-mock');
 
@@ -49086,8 +49109,17 @@ function _enterTranslatedTranscriptReview(){
   const firstLang = (st.tgts && st.tgts.length) ? st.tgts[0] : (st.tgt || 'es');
   if(st.transPerLang && st.transPerLang[firstLang]){
     st.transPerLang[firstLang].forEach((t, i) => {
-      if(st.segs[i]) st.segs[i].trans = t;
+      if(!st.segs[i]) return;
+      // Fall back to seg.orig when translation came back empty so seg.trans is
+      // never falsy — keeps wfStep=3 detection reliable and avoids the user
+      // landing on a blank translated-transcript review.
+      st.segs[i].trans = (t && String(t).trim()) ? t : (st.segs[i].orig || '');
     });
+  } else {
+    // No translations at all for this language — surface a warning so the
+    // user knows translation silently failed instead of looping them.
+    try { toast('Translation results missing for ' + firstLang.toUpperCase() + ' — showing source as fallback', 'warn', 5000); } catch(e){}
+    (st.segs||[]).forEach(s => { if(!s.trans) s.trans = s.orig || ''; });
   }
   st.tgt = firstLang;
   st.wfStep = 3;
@@ -50552,6 +50584,104 @@ async function _voTimeStretchBuffer(audioBuf, targetDur, ctx, opts){
 let _voPreviewBlobsPerLang = {};  // { langCode: blobs[] } — one entry per completed language
 let _voActivePrevLang     = null;
 
+// ─── VO BLOB PERSISTENCE (IndexedDB) ─────────────────────────────────────────
+// Object-URLs and AudioContext buffers don't survive a page reload, but the
+// raw Blob payloads do — so we cache them in IndexedDB keyed by jobId+lang.
+// On project reopen we re-hydrate _voPreviewBlobsPerLang from disk and
+// generate fresh object URLs, avoiding the need to re-synthesise.
+const _VO_DB_NAME = 'welo-vo-store';
+const _VO_DB_VERSION = 1;
+const _VO_STORE = 'blobs';
+let _voDbPromise = null;
+
+function _voOpenDb(){
+  if(_voDbPromise) return _voDbPromise;
+  _voDbPromise = new Promise((resolve, reject) => {
+    try {
+      const req = indexedDB.open(_VO_DB_NAME, _VO_DB_VERSION);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if(!db.objectStoreNames.contains(_VO_STORE)){
+          db.createObjectStore(_VO_STORE, { keyPath: 'key' });
+        }
+      };
+      req.onsuccess = (e) => resolve(e.target.result);
+      req.onerror   = (e) => reject(e.target.error);
+    } catch(e){ reject(e); }
+  });
+  return _voDbPromise;
+}
+
+async function _voSaveBlobs(jobId, lang, blobs){
+  if(!jobId || !lang || !blobs || !blobs.length) return;
+  try {
+    const db = await _voOpenDb();
+    return new Promise((resolve) => {
+      const tx = db.transaction(_VO_STORE, 'readwrite');
+      const store = tx.objectStore(_VO_STORE);
+      // Strip object URLs (won't survive); keep raw Blob + seg metadata.
+      const serialised = blobs.map(b => ({
+        blob: b ? b.blob : null,
+        seg:  b && b.seg ? { ...b.seg } : null,
+        fname: b ? b.fname : null,
+      }));
+      store.put({
+        key: `${jobId}__${lang}`,
+        jobId, lang,
+        blobs: serialised,
+        savedAt: Date.now(),
+      });
+      tx.oncomplete = () => { console.log('[voSave] cached', blobs.length, 'blobs for', jobId, lang); resolve(true); };
+      tx.onerror    = () => { console.warn('[voSave] tx error', tx.error); resolve(false); };
+    });
+  } catch(e){
+    console.warn('[voSave]', e);
+    return false;
+  }
+}
+
+async function _voLoadBlobs(jobId, lang){
+  if(!jobId || !lang) return null;
+  try {
+    const db = await _voOpenDb();
+    return new Promise((resolve) => {
+      const tx = db.transaction(_VO_STORE, 'readonly');
+      const store = tx.objectStore(_VO_STORE);
+      const req = store.get(`${jobId}__${lang}`);
+      req.onsuccess = () => {
+        const rec = req.result;
+        if(!rec || !rec.blobs || !rec.blobs.length) return resolve(null);
+        // Re-create object URLs from the persisted blobs.
+        const blobs = rec.blobs.map(b => {
+          if(!b || !b.blob) return { blob: null, seg: b ? b.seg : null, url: null, fname: b ? b.fname : null };
+          return {
+            blob: b.blob,
+            seg: b.seg,
+            url: URL.createObjectURL(b.blob),
+            fname: b.fname,
+          };
+        });
+        console.log('[voLoad] restored', blobs.length, 'blobs for', jobId, lang);
+        resolve(blobs);
+      };
+      req.onerror = () => resolve(null);
+    });
+  } catch(e){
+    console.warn('[voLoad]', e);
+    return null;
+  }
+}
+
+// Restore every language's blobs for a job. Used by _reopenDeliveredJob.
+async function _voLoadAllForJob(jobId, tgts){
+  const out = {};
+  for(const lang of (tgts||[])){
+    const b = await _voLoadBlobs(jobId, lang);
+    if(b && b.length) out[lang] = b;
+  }
+  return out;
+}
+
 function voSwitchPreviewLang(lang){
   _voActivePrevLang = lang;
   _voPreviewBlobs = _voPreviewBlobsPerLang[lang] || [];
@@ -50914,6 +51044,19 @@ async function _renderVoAudio(blobs){
   return _audioBufferToWav(await offCtx.startRendering());
 }
 
+
+// Wired to the "Finish & back to projects" button on the VO delivery screen.
+// The VO preview uses the Web Audio API independently of the <video> element,
+// so simply navigating away doesn't stop the dub audio — we have to tear
+// down the AudioContext + scheduled sources explicitly first.
+function voFinishAndExit(){
+  try { _voStopScheduledAudio(); } catch(e){}
+  if(_voPreviewCtx){ try{ _voPreviewCtx.close(); }catch(e){} _voPreviewCtx = null; }
+  _voDecodedItems = [];
+  const vid = $('vo-preview-vid');
+  if(vid){ try { vid.pause(); } catch(e){} vid.currentTime = 0; vid.muted = true; }
+  openDashboard();
+}
 
 async function voDownloadVideoWithVO(){
   const vid = $('vo-preview-vid');
@@ -52567,6 +52710,10 @@ function initVoEngineScreen(){
             _updateOverlayProgress(lang, i);
             const blobs = await runElTTSSegments(elKey, voiceId, quality, lang);
             _voPreviewBlobsPerLang[lang] = blobs;
+            // Persist this language's blobs to IndexedDB so the project can
+            // be re-opened from the dashboard later (after page reload) and
+            // hydrate without re-synthesising the voice-over.
+            if(st.jobId) _voSaveBlobs(st.jobId, lang, blobs).catch(()=>{});
           }
           // Show preview with the first target language active. We still
           // call showAssetsReceived so the delivery screen state (downloads,
