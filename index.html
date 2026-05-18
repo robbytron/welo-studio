@@ -47863,8 +47863,22 @@ async function _reopenDeliveredJob(j){
   if(hasBlobs){
     _voActivePrevLang = tgts[0];
     _svActiveLang = tgts[0];
+    st.tgts = tgts.slice();
+    st.tgt = tgts[0];
     _voPreviewBlobs = _voPreviewBlobsPerLang[tgts[0]] || [];
+    // Hydrate first-language translations onto seg.trans so the SRT download
+    // and "Re-edit translations" pill work after reopen.
+    if(st.transPerLang && st.transPerLang[tgts[0]] && st.segs){
+      st.transPerLang[tgts[0]].forEach((t, i) => {
+        if(st.segs[i]) st.segs[i].trans = (t && String(t).trim()) ? t : (st.segs[i].orig || '');
+      });
+    }
+    // showAssetsReceived mutates DOM inside #synthvo-screen but does not
+    // activate the screen — without this the user lands on an inactive
+    // screen (blank page) when reopening from the dashboard.
+    show('synthvo-screen');
     showAssetsReceived(_voPreviewBlobs);
+    window.scrollTo(0, 0);
     toast(`Re-opened ${j.projectName} · ready to re-download or re-edit`, 'success', 4000);
   } else {
     // No blobs anywhere — page was reloaded AND IDB cache is empty/lost.
