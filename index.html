@@ -40634,7 +40634,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             </div>
             <div class="ws-tier-includes">ASR · Opal · Synthetic VO · AI Sync</div>
             <div class="ws-tier-ideal">Basic training &amp; explainer videos</div>
-            <div class="ws-tier-price" id="tp-smart"><span class="ws-tp-from">from</span> $7/min</div>
+            <div class="ws-tier-price" id="tp-smart"><span class="ws-tp-from">from</span> $2/min/lang</div>
           </div>
           <div class="ws-tier-card tier-card" data-tier="standard-subs">
             <div class="ws-tier-head">
@@ -40644,7 +40644,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             </div>
             <div class="ws-tier-includes">ASR · Opal · Linguist review · Captions</div>
             <div class="ws-tier-ideal">Webinars, product videos &amp; tutorials</div>
-            <div class="ws-tier-price" id="tp-standard-subs"><span class="ws-tp-from">from</span> $14/min</div>
+            <div class="ws-tier-price" id="tp-standard-subs">$20/min/lang</div>
           </div>
           <div class="ws-tier-card tier-card" data-tier="standard-vo">
             <div class="ws-tier-head">
@@ -40654,7 +40654,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             </div>
             <div class="ws-tier-includes">ASR · Opal · Synthetic VO · VO Sync</div>
             <div class="ws-tier-ideal">Training videos &amp; customer support</div>
-            <div class="ws-tier-price" id="tp-standard-vo"><span class="ws-tp-from">from</span> $23/min</div>
+            <div class="ws-tier-price" id="tp-standard-vo"><span class="ws-tp-from">from</span> $10/min/lang</div>
           </div>
           <div class="ws-tier-card tier-card" data-tier="premium">
             <div class="ws-tier-head">
@@ -43076,22 +43076,42 @@ function globalGoHome() {
 const DEMO_VIDEO_URL   = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4';
 const DEMO_VIDEO_THUMB = 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerFun.jpg';
 
-// ── Pricing constants (2025 MM Rate Sheet) ────────────────────────────────────
-const TR_RATES   = {A:6, B:7.5, C:8.5};   // ASR rate by language group ($/min)
-const SUB_RATE   = 45;                     // $/hr for subtitling/captioning
-const SUB_MINS   = 8 * 1.3;               // subtitling work-mins per video-min + 30% QA
-const BURNIN_RATE = 3;                    // $/min per language — open caption burn-in
-const SYNTH_HIGH = 10;                    // $/min — high quality synth VO
-const SYNTH_MED  = 5;                     // $/min — medium quality synth VO
-const SYNTH_RAW  = 1;                     // $/min — raw/low quality synth VO
-const SYNC_RATE  = 45;                    // $/hr for audio sync
-const SYNC_FULL  = 22.5;                  // sync work-mins per video-min (full)
-const SYNC_LITE  = 10;                    // sync work-mins per video-min (low)
-const WORDS_PER_MIN = 150;                // average words per minute of video
-const TR_WORD_RATE  = 0.06;              // $/word translation rate
-const TR_MIN_RATE   = WORDS_PER_MIN * TR_WORD_RATE; // = $9/min per language
-const SUBS_MIN   = 3;                     // minimum billable minutes — Standard Subtitling
-const VO_MIN     = 10;                    // minimum billable minutes — Standard Voice-Over
+// ── Pricing constants (2026 simplified flat-rate sheet) ──────────────────────
+// All rates are $/min per target language.
+const FLAT_SMART = { 'both': 7, 'captions': 2, 'synth-vo': 7 };
+const FLAT_SUBS  = { 'closed': 20, 'open': 20 };
+const FLAT_VO    = { 'high': 29, 'medium': 25, 'low': 10 };
+
+// Unified price calculator — single source of truth for both client portal &
+// studio intake. Returns { rate, total, modeLabel } given a tier and options.
+function calcFlatPrice(tier, opts){
+  const dur = +opts.dur || 0;
+  const numTgts = Math.max(+opts.numTgts || 1, 1);
+  let rate = 0, modeLabel = '';
+  if(tier === 'smart'){
+    const m = opts.smartMode || 'both';
+    rate = FLAT_SMART[m] != null ? FLAT_SMART[m] : FLAT_SMART['both'];
+    modeLabel = ({both:'Captions + Synth VO', captions:'Captions only', 'synth-vo':'Synth VO only'})[m] || 'Captions + Synth VO';
+  } else if(tier === 'standard-subs'){
+    const m = opts.subsMode || 'closed';
+    rate = FLAT_SUBS[m] != null ? FLAT_SUBS[m] : FLAT_SUBS['closed'];
+    modeLabel = m === 'open' ? 'Open Captions (burned-in)' : 'Closed Captions (SRT/VTT)';
+  } else if(tier === 'standard-vo'){
+    const q = opts.voQuality || 'medium';
+    rate = FLAT_VO[q] != null ? FLAT_VO[q] : FLAT_VO['medium'];
+    modeLabel = q === 'high' ? 'High quality' : q === 'low' ? 'Economy' : 'Standard quality';
+  }
+  return { rate, total: rate * dur * numTgts, modeLabel };
+}
+
+// Legacy aliases — kept so older code paths still resolve without errors.
+// New code should use calcFlatPrice instead.
+const TR_RATES   = {A:0, B:0, C:0};
+const SUB_RATE   = 0, SUB_MINS = 0, BURNIN_RATE = 0;
+const SYNTH_HIGH = 0, SYNTH_MED = 0, SYNTH_RAW = 0;
+const SYNC_RATE  = 0, SYNC_FULL = 0, SYNC_LITE = 0;
+const WORDS_PER_MIN = 150, TR_WORD_RATE = 0, TR_MIN_RATE = 0;
+const SUBS_MIN   = 0, VO_MIN = 0;
 
 const LANGUAGES = [
   {value:'es',   label:'Spanish',         grp:'A'},
@@ -43611,23 +43631,23 @@ function renderStep1(){
       tag:'Fully automated end-to-end pipeline. No human touch.',
       on:['Auto transcription (ASR)','Opal AI Translation','Synthetic voice-over','AI sync & timing'],
       off:['Linguist review','Voice talent'],
-      price:'7', unit:'/ min', ta:'ph-lightning', taLabel:'Same-hour turnaround' },
+      price:'2', unit:'/ min / lang', ta:'ph-lightning', taLabel:'Same-hour turnaround' },
     { key:'standard-subs', ph:'ph-subtitles', cls:'wl-mid',
       eyebrow:'Tier 02 · Hybrid', name:'Standard Subtitling',
       tag:'AI does the heavy lift — a linguist reviews and polishes.',
       on:['Auto transcription (ASR)','Opal AI Translation','Linguist post-edit & QA','Closed or open captions'],
       off:['Voice talent'],
-      price:'14', unit:'/ min', ta:'ph-clock', taLabel:'24–48 hr turnaround' },
+      price:'20', unit:'/ min / lang', ta:'ph-clock', taLabel:'24–48 hr turnaround' },
     { key:'standard-vo', ph:'ph-waveform', cls:'wl-mid',
       eyebrow:'Tier 03 · Hybrid', name:'Standard Voice-Over',
       tag:'Synthetic voice with human-reviewed translation and audio sync.',
       on:['Auto transcription (ASR)','Opal AI Translation','Linguist post-edit','Synthetic VO + audio sync'],
       off:['Voice talent'],
-      price:'23', unit:'/ min', ta:'ph-clock', taLabel:'24–48 hr turnaround' },
+      price:'10', unit:'/ min / lang', ta:'ph-clock', taLabel:'24–48 hr turnaround' },
     { key:'premium', ph:'ph-crown-simple', cls:'wl-top',
       eyebrow:'Tier 04 · Premium', name:'Premium Studio',
-      tag:'Hand-crafted from transcription to dubbing. Broadcast grade.',
-      on:['Human transcription','Human translation + QA','Senior linguist sign-off','Voice talent casting','Studio dubbing & mix'],
+      tag:'Hand crafted from transcription to dubbing to on screen text to eLearning to broadcast grade.',
+      on:['Human transcription','Human translation + QA','Senior linguist sign-off','Voice talent casting','Studio dubbing & mix','On screen text localization','eLearning localization'],
       off:[],
       price:null, unit:null, ta:'ph-calendar-blank', taLabel:'5–10 day turnaround' },
   ];
@@ -43714,9 +43734,9 @@ function renderStep1(){
     <div class="wl-sub-opts">
       <div class="wl-sub-opts-label">Voice quality level</div>
       <div class="wl-sob-grid">
-        ${[{k:'high',   ph:'ph-star',      title:'High quality',     rate:'~$10/min', desc:'Premium voice engine — closest to human narration'},
-           {k:'medium', ph:'ph-lightning', title:'Standard quality', rate:'~$5/min',  desc:'Balanced quality and cost — recommended for most projects'},
-           {k:'low',    ph:'ph-package',   title:'Economy quality',  rate:'~$1/min',  desc:'Fastest turnaround — good for internal use'}]
+        ${[{k:'high',   ph:'ph-star',      title:'High quality',     rate:'$29/min/lang', desc:'Premium voice engine — closest to human narration'},
+           {k:'medium', ph:'ph-lightning', title:'Standard quality', rate:'$25/min/lang', desc:'Balanced quality and cost — recommended for most projects'},
+           {k:'low',    ph:'ph-package',   title:'Economy quality',  rate:'$10/min/lang', desc:'Fastest turnaround — good for internal use'}]
           .map(o=>`<button class="wl-sob-btn${d.voQuality===o.k?' wl-sob-sel':''}" onclick="setVoQuality('${o.k}')">
             <div class="wl-sob-ico"><i class="ph ${o.ph}"></i></div>
             <div><div class="wl-sob-title">${o.title} <span class="wl-sob-rate">${o.rate}</span></div><div class="wl-sob-desc">${o.desc}</div></div>
@@ -43839,72 +43859,35 @@ function buildEstBox(){
   const dur = (d.files&&d.files.length)
     ? d.files.reduce((s,f)=>s+(f.durMins||0),0)
     : (+d.durMin||0)+(+d.durSec||0)/60;
-  const grp=d.langGroup||'B';
-  const trRate=TR_RATES[grp]||7.5;
   const numTgts=Math.max(d.tgtLangs.length,1);
-  const tgtLbl=numTgts>1?` × ${numTgts} langs`:'';
-  let rows=[], total=0;
 
-  if(d.tier==='smart'){
-    const mode=d.smartMode||'both', trCost=dur*trRate;
-    if(mode==='captions'){
-      const c=dur*trRate*numTgts; rows=[{label:`ASR → Captions (Grp ${grp} · $${trRate}/min${tgtLbl})`,cost:c},{label:'Opal',cost:null,note:'per client MSA'}]; total=c;
-    } else if(mode==='synth-vo'){
-      const s=dur*SYNTH_RAW*numTgts; rows=[{label:`ASR (Grp ${grp} · $${trRate}/min)`,cost:trCost},{label:`Synth VO Raw ($${SYNTH_RAW}/min${tgtLbl})`,cost:s},{label:'Opal AI Translation',cost:null,note:'per client MSA'}]; total=trCost+s;
-    } else {
-      const s=dur*SYNTH_RAW*numTgts; rows=[{label:`ASR (Grp ${grp} · $${trRate}/min)`,cost:trCost},{label:`Synth VO Raw ($${SYNTH_RAW}/min${tgtLbl})`,cost:s},{label:'Opal + Captions',cost:null,note:'per client MSA'}]; total=trCost+s;
-    }
-  } else if(d.tier==='standard-subs'){
-    const bd = Math.max(dur, SUBS_MIN);
-    const minNote = dur < SUBS_MIN ? ` · ${SUBS_MIN}-min minimum` : '';
-    const trCost = bd * trRate;
-    const subHrs = (bd * SUB_MINS) / 60;
-    const subCost = subHrs * SUB_RATE * numTgts;
-    const isOpen = (d.subsMode||'closed') === 'open';
-    const burnCost = isOpen ? dur * BURNIN_RATE * numTgts : 0;
-    const subLbl = isOpen
-      ? `Subtitling – Open Captions ($45/hr · ${subHrs.toFixed(1)}h${tgtLbl}${minNote})`
-      : `Subtitling – Closed Captions ($45/hr · ${subHrs.toFixed(1)}h${tgtLbl}${minNote})`;
-    const trInclCost = bd * TR_MIN_RATE * numTgts;
-    rows = [
-      {label:`ASR (Grp ${grp} · $${trRate}/min${minNote})`, cost:trCost},
-      {label:subLbl, cost:subCost},
-      {label:`Translation + Linguist Review ($${TR_WORD_RATE}/word · ${WORDS_PER_MIN}wpm${tgtLbl}${minNote})`, cost:trInclCost},
-    ];
-    if(isOpen) rows.splice(2, 0, {label:`Burn-in Rendering ($${BURNIN_RATE}/min${tgtLbl})`, cost:burnCost});
-    total = trCost + subCost + burnCost + trInclCost;
-  } else if(d.tier==='standard-vo'){
-    const bd = Math.max(dur, VO_MIN);
-    const minNote = dur < VO_MIN ? ` · ${VO_MIN}-min minimum` : '';
-    const voq = d.voQuality || 'medium';
-    const synthRate = voq==='high' ? SYNTH_HIGH : voq==='low' ? SYNTH_RAW : SYNTH_MED;
-    const syncMins = voq==='low' ? SYNC_LITE : SYNC_FULL;
-    const trCost = bd * trRate;
-    const synthCost = bd * synthRate * numTgts;
-    const syncHrs = (bd * syncMins) / 60;
-    const syncCost = syncHrs * SYNC_RATE * numTgts;
-    const voLbl = voq==='high' ? `High (~$${SYNTH_HIGH}/min)` : voq==='low' ? `Low (~$${SYNTH_RAW}/min)` : `Medium (~$${SYNTH_MED}/min)`;
-    const trInclCost = bd * TR_MIN_RATE * numTgts;
-    rows = [
-      {label:`ASR (Grp ${grp} · $${trRate}/min)`, cost:trCost},
-      {label:`Synth VO – ${voLbl}${tgtLbl}${minNote}`, cost:synthCost},
-      {label:`Audio Sync ($45/hr · ${syncHrs.toFixed(1)}h${tgtLbl})`, cost:syncCost},
-      {label:`Translation + Linguist Review ($${TR_WORD_RATE}/word · ${WORDS_PER_MIN}wpm${tgtLbl})`, cost:trInclCost},
-    ];
-    total = trCost + synthCost + syncCost + trInclCost;
+  // Premium is quoted offline — handled by the caller.
+  if(d.tier==='premium'){
+    return `<div class="est-box">
+      <div class="est-hdr"><div class="est-hdr-title">Premium — Quoted Offline</div></div>
+      <div class="est-premium" style="padding:12px 0 0;font-family:var(--font-sans);font-size:13px;color:rgba(255,255,255,0.75);">A quote will be sent within 1 business day.</div>
+    </div>`;
   }
 
-  const rowsHtml = rows.map(r=>r.cost===null
-    ?`<div class="est-row"><span style="color:rgba(255,255,255,0.45);display:flex;align-items:center;gap:6px;"><i class="ph ph-info" style="font-size:13px;flex-shrink:0;"></i>${r.label}</span><span class="est-row-note">${r.note}</span></div>`
-    :`<div class="est-row"><span style="display:flex;align-items:center;gap:6px;color:rgba(255,255,255,0.85);"><i class="ph ph-check" style="font-size:13px;flex-shrink:0;color:var(--wl-mint-500);"></i>${r.label}</span><span class="est-row-cost">${dur>0?'$'+r.cost.toFixed(2):'—'}</span></div>`).join('');
+  const { rate, total, modeLabel } = calcFlatPrice(d.tier, {
+    dur, numTgts,
+    smartMode: d.smartMode, subsMode: d.subsMode, voQuality: d.voQuality,
+  });
+
+  const tgtLbl = numTgts>1 ? ` × ${numTgts} langs` : '';
+  const lineLabel = `${modeLabel} · $${rate}/min × ${dur>0?dur.toFixed(1):'—'} min${tgtLbl}`;
+
+  const lineHtml = dur>0
+    ? `<div class="est-row"><span style="display:flex;align-items:center;gap:6px;color:rgba(255,255,255,0.85);"><i class="ph ph-check" style="font-size:13px;flex-shrink:0;color:var(--wl-mint-500);"></i>${lineLabel}</span><span class="est-row-cost">$${total.toFixed(2)}</span></div>`
+    : `<div class="est-row"><span style="display:flex;align-items:center;gap:6px;color:rgba(255,255,255,0.45);"><i class="ph ph-info" style="font-size:13px;flex-shrink:0;"></i>${modeLabel} · $${rate}/min/lang</span><span class="est-row-note">awaiting duration</span></div>`;
 
   const totalLine = dur>0
-    ?`<div class="est-total"><div><div class="est-total-label">Estimated subtotal</div></div><div class="est-total-amt">$${total.toFixed(2)}</div></div>`
-    :`<div style="padding:12px 0 0;font-family:var(--font-sans);font-size:12px;color:rgba(255,255,255,0.45);display:flex;align-items:center;gap:6px;"><i class="ph ph-warning" style="font-size:14px;flex-shrink:0;color:#f87171;"></i>Enter video duration to calculate your price estimate.</div>`;
+    ? `<div class="est-total"><div><div class="est-total-label">Estimated total</div></div><div class="est-total-amt">$${total.toFixed(2)}</div></div>`
+    : `<div style="padding:12px 0 0;font-family:var(--font-sans);font-size:12px;color:rgba(255,255,255,0.45);display:flex;align-items:center;gap:6px;"><i class="ph ph-warning" style="font-size:14px;flex-shrink:0;color:#f87171;"></i>Enter video duration to calculate your price estimate.</div>`;
 
   return `<div class="est-box">
-    <div class="est-hdr"><div class="est-hdr-title">Estimated Cost</div><span class="est-note">Indicative · 2025 rates · 10-min minimum on translation</span></div>
-    <div class="est-body">${rowsHtml}</div>
+    <div class="est-hdr"><div class="est-hdr-title">Estimated Cost</div><span class="est-note">Flat $/min per language · indicative</span></div>
+    <div class="est-body">${lineHtml}</div>
     ${totalLine}
   </div>`;
 }
@@ -44371,13 +44354,14 @@ function renderStep4(){
   const d=cp.draft;
   const files=d.files||[];
   const dur=files.length ? files.reduce((s,f)=>s+(f.durMins||0),0) : (+d.durMin||0)+(+d.durSec||0)/60;
-  const grp=d.langGroup||'B';
-  const trRate=TR_RATES[grp]||7.5;
   const numTgts=Math.max(d.tgtLangs.length,1);
   let total=null;
-  if(d.tier==='smart'){ const m=d.smartMode||'both'; total=(m==='captions'?dur*trRate*numTgts:dur*trRate+(m==='synth-vo'?dur*SYNTH_RAW*numTgts:dur*SYNTH_RAW*numTgts)); }
-  else if(d.tier==='standard-subs'){ const bd=Math.max(dur,SUBS_MIN),isOpen=(d.subsMode||'closed')==='open'; total=bd*trRate+(bd*SUB_MINS/60)*SUB_RATE*numTgts+(isOpen?dur*BURNIN_RATE*numTgts:0)+bd*TR_MIN_RATE*numTgts; }
-  else if(d.tier==='standard-vo'){ const bd=Math.max(dur,VO_MIN),vr=d.voQuality==='high'?SYNTH_HIGH:d.voQuality==='low'?SYNTH_RAW:SYNTH_MED,sm=d.voQuality==='low'?SYNC_LITE:SYNC_FULL; total=bd*trRate+bd*vr*numTgts+(bd*sm/60)*SYNC_RATE*numTgts+bd*TR_MIN_RATE*numTgts; }
+  if(d.tier && d.tier !== 'premium'){
+    total = calcFlatPrice(d.tier, {
+      dur, numTgts,
+      smartMode: d.smartMode, subsMode: d.subsMode, voQuality: d.voQuality,
+    }).total;
+  }
 
   const scopeLabels=(d.tier==='premium'&&d.selectedScope.length)?d.selectedScope.map(v=>{ const all=[...VIDEO_SCOPES,...ELEARN_SCOPES]; const s=all.find(x=>x.val===v); return s?s.label+(s.sub?' ('+s.sub+')':''):''; }).filter(Boolean).join(', '):'—';
 
@@ -44389,7 +44373,7 @@ function renderStep4(){
         <div class="review-row"><span class="rl">Tier</span><span class="rv">${getTierLabel(d.tier)}</span></div>
         ${d.tier==='smart'?`<div class="review-row"><span class="rl">Delivery format</span><span class="rv">${{both:'Captions + Synth VO',captions:'Captions only','synth-vo':'Synth VO only'}[d.smartMode]}</span></div>`:''}
         ${d.tier==='standard-subs'?`<div class="review-row"><span class="rl">Caption delivery</span><span class="rv">${(d.subsMode||'closed')==='open'?'Open Captions — burned into video':'Closed Captions — SRT/VTT file'}</span></div>`:''}
-        ${d.tier==='standard-vo'?`<div class="review-row"><span class="rl">VO quality</span><span class="rv">${{high:'High (~$10/min)',medium:'Medium (~$5/min)',low:'Low (~$1/min)'}[d.voQuality||'medium']}</span></div>`:''}
+        ${d.tier==='standard-vo'?`<div class="review-row"><span class="rl">VO quality</span><span class="rv">${{high:'High quality ($29/min)',medium:'Standard quality ($25/min)',low:'Economy ($10/min)'}[d.voQuality||'medium']}</span></div>`:''}
         ${d.tier==='premium'?`<div class="review-row"><span class="rl">Scope</span><span class="rv">${scopeLabels}</span></div>`:''}
       </div>
       <div class="review-sec">
@@ -44401,7 +44385,6 @@ function renderStep4(){
         ${files.length<=1?`<div class="review-row"><span class="rl">Duration</span><span class="rv">${dur>0?fmtMins(dur):`<span style="color:#e53e3e;font-weight:600;font-family:var(--font-sans);display:inline-flex;align-items:center;gap:5px;"><i class="ph ph-warning" style="font-size:14px;flex-shrink:0;"></i>Not specified — <a href="#" onclick="cp.step=2;renderIntake();return false;" style="color:#e53e3e">go back to add</a></span>`}</span></div>`:''}
         <div class="review-row"><span class="rl">Source</span><span class="rv">English</span></div>
         <div class="review-row"><span class="rl">Targets (${numTgts})</span><span class="rv">${d.tgtLangs.map(v=>{ const l=LANGUAGES.find(x=>x.value===v); return l?l.label:v; }).join(', ')}</span></div>
-        <div class="review-row"><span class="rl">Language group</span><span class="rv">Group ${grp} · $${trRate}/min</span></div>
       </div>
       <div class="review-sec">
         <div class="review-sec-title">Project Details</div>
@@ -44411,7 +44394,7 @@ function renderStep4(){
       </div>
       ${total!=null?`
       <div class="est-box">
-        <div class="est-hdr"><div class="est-hdr-title">Estimated Cost</div><span class="est-note">Indicative · 2025 rates</span></div>
+        <div class="est-hdr"><div class="est-hdr-title">Estimated Cost</div><span class="est-note">Flat $/min per language · indicative</span></div>
         <div class="est-total"><div class="est-total-label">${getTierLabel(d.tier)} · ${numTgts} language${numTgts>1?'s':''} · ${dur.toFixed(1)} min</div><div class="est-total-amt">$${total.toFixed(2)}</div></div>
       </div>`:d.tier==='premium'?`<div class="est-box"><div class="est-hdr"><div class="est-hdr-title">Premium — Quoted Offline</div></div><div class="est-premium">A quote will be sent within 1 business day.</div></div>`:''}
     </div>
@@ -44462,11 +44445,14 @@ function submitJob(){
   const dur = files.length ? files.reduce((s,f)=>s+(f.durMins||0),0) : (+d.durMin||0)+(+d.durSec||0)/60;
   const mediaName = files.length ? files.map(f=>f.name).join(', ') : '(no file selected)';
   const mediaType = files.length ? files[0].type : 'video';
-  const grp=d.langGroup||'B', trRate=TR_RATES[grp]||7.5, numTgts=d.tgtLangs.length||1;
+  const numTgts=d.tgtLangs.length||1;
   let estCost=null;
-  if(d.tier==='smart'){ const m=d.smartMode||'both'; estCost=(m==='captions'?dur*trRate*numTgts:dur*trRate+(m==='synth-vo'?dur*SYNTH_RAW*numTgts:dur*SYNTH_RAW*numTgts)); }
-  else if(d.tier==='standard-subs'){ const bd=Math.max(dur,SUBS_MIN),isOpen=(d.subsMode||'closed')==='open'; estCost=bd*trRate+(bd*SUB_MINS/60)*SUB_RATE*numTgts+(isOpen?dur*BURNIN_RATE*numTgts:0)+bd*TR_MIN_RATE*numTgts; }
-  else if(d.tier==='standard-vo'){ const bd=Math.max(dur,VO_MIN),vr=d.voQuality==='high'?SYNTH_HIGH:d.voQuality==='low'?SYNTH_RAW:SYNTH_MED,sm=d.voQuality==='low'?SYNC_LITE:SYNC_FULL; estCost=bd*trRate+bd*vr*numTgts+(bd*sm/60)*SYNC_RATE*numTgts+bd*TR_MIN_RATE*numTgts; }
+  if(d.tier && d.tier !== 'premium'){
+    estCost = calcFlatPrice(d.tier, {
+      dur, numTgts,
+      smartMode: d.smartMode, subsMode: d.subsMode, voQuality: d.voQuality,
+    }).total;
+  }
   const isSmart = d.tier === 'smart';
   const job = {
     id:genId(), clientName:cp.user?.company||'Client', clientEmail:cp.user?.email||'',
@@ -44602,22 +44588,16 @@ const CMP = [
   {name:"Azure TTS", color:"#0078d4",nat:"Neutral",      natColor:"#f5f5f5",natTxt:"#aaa",                                    score:78,timing:96},
 ];
 
-// ─── PRICING ENGINE (2025 MM Rate Sheet) ───
-const ST_TR_RATES = {A:6, B:7.5, C:8.5};          // per video minute
-const ST_SUB_RATE      = 45;    // $/hr for subtitling/captioning
-const ST_SUB_MINS      = 8 * 1.3; // subtitling work-mins per video-min + 30% QA
-const ST_BURNIN_RATE   = 3;    // $/min per lang — open caption burn-in
-const ST_WORDS_PER_MIN = 150;  // average words per minute of video
-const ST_TR_WORD_RATE  = 0.06; // $/word translation rate
-const ST_TR_MIN_RATE   = ST_WORDS_PER_MIN * ST_TR_WORD_RATE; // = $9/min per language
-const ST_SUBS_MIN      = 3;    // minimum billable minutes — Standard Subtitling
-const ST_VO_MIN        = 10;   // minimum billable minutes — Standard Voice-Over
-const ST_SYNTH_HIGH = 10;                             // $/min - premium quality model
-const SYNTH_LOW  = 5;                              // $/min - standard quality
-const ST_SYNTH_RAW  = 1;                              // $/min - raw / unreviewed
-const ST_SYNC_RATE  = 45;                             // $/hr
-const SYNC_MINS_FULL = 22.5;                       // full sync min/min playtime
-const SYNC_MINS_LITE = 10;                         // light sync min/min playtime
+// ─── PRICING ENGINE (2026 simplified flat-rate sheet) ───
+// Studio intake mirrors the client portal — single source of truth lives in
+// calcFlatPrice() above. Old per-component constants kept as zeroed legacy
+// aliases for any straggler code paths.
+const ST_TR_RATES = {A:0, B:0, C:0};
+const ST_SUB_RATE = 0, ST_SUB_MINS = 0, ST_BURNIN_RATE = 0;
+const ST_WORDS_PER_MIN = 150, ST_TR_WORD_RATE = 0, ST_TR_MIN_RATE = 0;
+const ST_SUBS_MIN = 0, ST_VO_MIN = 0;
+const ST_SYNTH_HIGH = 0, SYNTH_LOW = 0, ST_SYNTH_RAW = 0;
+const ST_SYNC_RATE = 0, SYNC_MINS_FULL = 0, SYNC_MINS_LITE = 0;
 
 // Language definitions with group assignments
 const ST_LANGUAGES = [
@@ -44758,7 +44738,6 @@ document.addEventListener('click',e=>{
 function recalcPrice(){
   const box=$('est-box'); if(!box) return;
   const dur=getDurMins();
-  const grp=getTrGroup();
   const tier=st.tier||'smart';
   const numTgts=Math.max(st.tgts.length,1);
   const tgtLabel=numTgts>1?` × ${numTgts} langs`:'';
@@ -44768,79 +44747,14 @@ function recalcPrice(){
     $('est-body').style.display='none';
     $('est-premium').style.display='flex';
     const th=$('est-title'); if(th) th.textContent='Premium — Quoted Offline';
+    let existing=$('est-total-row'); if(existing) existing.remove();
     return;
   }
 
-  const trRate=ST_TR_RATES[grp]||7.5;
-  let rows=[], total=0;
-
-  if(tier==='smart'){
-    const mode=st.smartMode||'both';
-    const trCost=dur*trRate;
-    if(mode==='captions'){
-      const capCost=dur*trRate*numTgts; // ASR per lang (each lang needs transcription)
-      rows=[
-        {label:`ASR → Captions (Group ${grp} · $${trRate}/min${tgtLabel})`, cost:capCost},
-        {label:'Opal',  cost:null, note:'per client MSA'},
-      ];
-      total=capCost;
-    } else if(mode==='synth-vo'){
-      const synthCost=dur*ST_SYNTH_RAW*numTgts;
-      rows=[
-        {label:`ASR Transcription (Group ${grp} · $${trRate}/min)`, cost:trCost},
-        {label:`Synthetic VO Raw ($${ST_SYNTH_RAW}/min${tgtLabel})`,   cost:synthCost},
-        {label:'Opal',  cost:null, note:'per client MSA'},
-      ];
-      total=trCost+synthCost;
-    } else { // both
-      const synthCost=dur*ST_SYNTH_RAW*numTgts;
-      rows=[
-        {label:`ASR Transcription (Group ${grp} · $${trRate}/min)`,      cost:trCost},
-        {label:`Synthetic VO Raw ($${ST_SYNTH_RAW}/min${tgtLabel})`,         cost:synthCost},
-        {label:`Captions from transcript${tgtLabel}`,                     cost:0, note:'included'},
-        {label:'Opal',  cost:null, note:'per client MSA'},
-      ];
-      total=trCost+synthCost;
-    }
-  } else if(tier==='standard-subs'){
-    const bd = Math.max(dur, ST_SUBS_MIN);
-    const minNote = dur < ST_SUBS_MIN ? ` · ${ST_SUBS_MIN}-min minimum` : '';
-    const trCost = bd * trRate;
-    const subHrs = (bd * ST_SUB_MINS) / 60;
-    const subCost = subHrs * ST_SUB_RATE * numTgts;
-    const isOpen = (st.subsMode||'closed') === 'open';
-    const burnCost = isOpen ? dur * ST_BURNIN_RATE * numTgts : 0;
-    const trInclCost = bd * ST_TR_MIN_RATE * numTgts;
-    const subLbl = isOpen
-      ? `Subtitling – Open Captions ($45/hr · ${subHrs.toFixed(1)}h${tgtLabel}${minNote})`
-      : `Subtitling – Closed Captions ($45/hr · ${subHrs.toFixed(1)}h${tgtLabel}${minNote})`;
-    rows = [
-      {label:`ASR Transcription (Group ${grp} · $${trRate}/min${minNote})`, cost:trCost},
-      {label:subLbl, cost:subCost},
-      {label:`Translation + Linguist Review ($${ST_TR_WORD_RATE}/word · ${ST_WORDS_PER_MIN}wpm${tgtLabel}${minNote})`, cost:trInclCost},
-    ];
-    if(isOpen) rows.splice(2, 0, {label:`Burn-in Rendering ($${ST_BURNIN_RATE}/min${tgtLabel})`, cost:burnCost});
-    total = trCost + subCost + burnCost + trInclCost;
-  } else if(tier==='standard-vo'){
-    const bd = Math.max(dur, ST_VO_MIN);
-    const minNote = dur < ST_VO_MIN ? ` · ${ST_VO_MIN}-min minimum` : '';
-    const voq = st.voQuality || 'medium';
-    const synthRate = voq==='high' ? ST_SYNTH_HIGH : voq==='low' ? ST_SYNTH_RAW : SYNTH_LOW;
-    const syncMins = voq==='low' ? SYNC_MINS_LITE : SYNC_MINS_FULL;
-    const trCost = bd * trRate;
-    const synthCost = bd * synthRate * numTgts;
-    const syncHrs = (bd * syncMins) / 60;
-    const syncCost = syncHrs * ST_SYNC_RATE * numTgts;
-    const trInclCost = bd * ST_TR_MIN_RATE * numTgts;
-    const voLabel = voq==='high' ? `High (~$${ST_SYNTH_HIGH}/min)` : voq==='low' ? `Low (~$${ST_SYNTH_RAW}/min)` : `Medium (~$${SYNTH_LOW}/min)`;
-    rows = [
-      {label:`ASR Transcription (Group ${grp} · $${trRate}/min${minNote})`, cost:trCost},
-      {label:`Synthetic VO – ${voLabel}${tgtLabel}${minNote}`, cost:synthCost},
-      {label:`Audio Sync ($45/hr · ${syncHrs.toFixed(1)}h${tgtLabel}${minNote})`, cost:syncCost},
-      {label:`Translation + Linguist Review ($${ST_TR_WORD_RATE}/word · ${ST_WORDS_PER_MIN}wpm${tgtLabel}${minNote})`, cost:trInclCost},
-    ];
-    total = trCost + synthCost + syncCost + trInclCost;
-  }
+  const { rate, total, modeLabel } = calcFlatPrice(tier, {
+    dur, numTgts,
+    smartMode: st.smartMode, subsMode: st.subsMode, voQuality: st.voQuality,
+  });
 
   // Show/hide and populate
   $('est-premium').style.display='none';
@@ -44851,29 +44765,22 @@ function recalcPrice(){
   body.innerHTML='';
 
   if(!dur||dur<=0){
-    body.innerHTML='<p style="font-size:12px;color:#bbb;text-align:center;padding:8px 0">Enter video duration above to see a price estimate.</p>';
+    body.innerHTML=`<p style="font-size:12px;color:#bbb;text-align:center;padding:8px 0">${modeLabel} · $${rate}/min per language<br>Enter video duration above to see a price estimate.</p>`;
     box.style.display='';
     let existing=$('est-total-row'); if(existing) existing.remove();
     return;
   }
 
-  rows.forEach(r=>{
-    const div=document.createElement('div');
-    div.className='est-row';
-    if(r.cost===null){
-      div.innerHTML=`<span class="est-row-label" style="color:#bbb"><span class="ico-sm"><i data-lucide="info"></i></span>${r.label}</span><span class="est-row-note">${r.note||''}</span>`;
-    } else if(r.cost===0){
-      div.innerHTML=`<span class="est-row-label" style="color:#aaa"><span class="ico-sm"><i data-lucide="check"></i></span>${r.label}</span><span class="est-row-note">${r.note||'included'}</span>`;
-    } else {
-      div.innerHTML=`<span class="est-row-label"><span class="ico-sm" style="color:var(--grn)"><i data-lucide="check"></i></span>${r.label}</span><span class="est-row-cost">$${r.cost.toFixed(2)}</span>`;
-    }
-    body.appendChild(div);
-  });
+  // Single-line summary row: <Mode> · $X/min × N min × L langs = $TOTAL
+  const div=document.createElement('div');
+  div.className='est-row';
+  div.innerHTML=`<span class="est-row-label"><span class="ico-sm" style="color:var(--grn)"><i data-lucide="check"></i></span>${modeLabel} · $${rate}/min × ${dur.toFixed(1)} min${tgtLabel}</span><span class="est-row-cost">$${total.toFixed(2)}</span>`;
+  body.appendChild(div);
 
   // Total line
   let totalRow=$('est-total-row');
   if(!totalRow){ totalRow=document.createElement('div'); totalRow.id='est-total-row'; totalRow.className='est-total'; box.appendChild(totalRow); }
-  totalRow.innerHTML=`<span class="est-total-label">Estimated subtotal <span class="est-total-note">(excl. translation)</span></span><span class="est-total-amt">$${total.toFixed(2)} <span style="font-size:12px;font-weight:400;color:#aaa">for ${dur.toFixed(1)} min</span></span>`;
+  totalRow.innerHTML=`<span class="est-total-label">Estimated total</span><span class="est-total-amt">$${total.toFixed(2)} <span style="font-size:12px;font-weight:400;color:#aaa">for ${dur.toFixed(1)} min</span></span>`;
   box.style.display='';
   lucide.createIcons();
 }
