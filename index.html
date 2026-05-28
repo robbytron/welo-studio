@@ -44463,7 +44463,7 @@ function submitJob(){
     intakeVoice:d.intakeVoice||null,
     subsMode:d.subsMode||'closed', voQuality:d.voQuality,
     scope:d.selectedScope, contentType:d.contentType,
-    durMins:dur>0?Math.round(dur*10)/10:null, langGroup:grp,
+    durMins:dur>0?Math.round(dur*10)/10:null, langGroup:d.langGroup||'B',
     estCost:estCost&&dur>0?Math.round(estCost*100)/100:null,
     notes:d.notes||'', status:'submitted',
     assignedTo:null, internalNotes:[], deliverables:[], clientApproved:false,
